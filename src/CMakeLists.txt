@@ -1,0 +1,11 @@
+
+file(GLOB PP_SOURCES "*.cpp")
+file(GLOB OP_SOURCES "${PROJECT_SOURCE_DIR}/contrib/cpp-optparse/OptionParser.cpp")
+
+set(EXEC_NAME "parallel-ploter")
+
+add_executable(${EXEC_NAME} ${PP_SOURCES} ${OP_SOURCES})
+
+target_link_libraries(${EXEC_NAME} ${OpenCL_LIBRARY})
+
+install(TARGETS ${EXEC_NAME} DESTINATION bin)
