@@ -42,6 +42,7 @@ if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} ${COMMON_WARN}  -faligned-new -fno-enforce-eh-specs -fnothrow-opt")
 elseif("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} ${COMMON_WARN}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBOOST_COMPUTE_USE_CPP11")
 endif()
 
 set(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin")
@@ -50,7 +51,7 @@ file(MAKE_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}")
 file(MAKE_DIRECTORY "${LIBRARY_OUTPUT_PATH}")
 
 # untill boost 1.68 compute is fixed
-find_package(Boost 1.64 REQUIRED COMPONENTS)
+find_package(Boost 1.68 REQUIRED COMPONENTS)
 include_directories("${Boost_INCLUDE_DIRS}")
 
 find_package(OpenCL REQUIRED)
