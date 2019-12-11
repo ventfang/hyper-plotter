@@ -25,8 +25,8 @@ execute_process(
 )
 
 configure_file(
-  "${PROJECT_SOURCE_DIR}/config.h.in"
-  "${PROJECT_BINARY_DIR}/config.h"
+  "${PROJECT_SOURCE_DIR}/src/config.h.in"
+  "${PROJECT_BINARY_DIR}/src/config.h"
 )
 
 set(CMAKE_C_STANDARD 11)
@@ -58,6 +58,7 @@ find_package(OpenCL REQUIRED)
 
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${PROJECT_SOURCE_DIR}")
+include_directories("${PROJECT_BINARY_DIR}/src")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/cpp-optparse/")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/spdlog/include/")
 
