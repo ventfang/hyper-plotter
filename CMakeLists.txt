@@ -51,7 +51,7 @@ file(MAKE_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}")
 file(MAKE_DIRECTORY "${LIBRARY_OUTPUT_PATH}")
 
 # untill boost 1.68 compute is fixed
-find_package(Boost 1.68 REQUIRED COMPONENTS)
+find_package(Boost 1.68 REQUIRED)
 include_directories("${Boost_INCLUDE_DIRS}")
 
 find_package(OpenCL REQUIRED)
@@ -59,6 +59,7 @@ find_package(OpenCL REQUIRED)
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${PROJECT_SOURCE_DIR}")
 include_directories("${PROJECT_BINARY_DIR}/src")
+include_directories("${PROJECT_SOURCE_DIR}/contrib/")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/cpp-optparse/")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/spdlog/include/")
 
