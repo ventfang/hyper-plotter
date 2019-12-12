@@ -12,6 +12,7 @@ namespace compute = boost::compute;
 #include <spdlog/sinks/basic_file_sink.h>
 
 #include "config.h"
+#include "plotter.h"
 
 namespace opt = optparse;
 using namespace std;
@@ -36,10 +37,12 @@ int main(int argc, char* argv[]) {
     .version(version)
     .description(desc);
 
-  static_assert(sizeof(unsigned long) == 8, "unsigned long must be equal to 8 bytes.");
+  static_assert(sizeof(unsigned long long) == 8, "unsigned long long must be equal to 8 bytes.");
   parser.add_option("-V", "--verbose").action("count").help("verbose, default: %default");
-  parser.add_option("-s", "--sn").action("store").type("unsigned long").set_default(0).help("start nonce, default: %default");
-  parser.add_option("-n", "--num").action("store").type("unsigned long").set_default(10000).help("number of nonces, default: %default");
+  parser.add_option("-t", "--test").action("count").help("test mode, default: %default");
+  parser.add_option("-i", "--id").action("store").type("uint64_t").set_default(0).help("plot id, default: %default");
+  parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(0).help("start nonce, default: %default");
+  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(1).help("number of nonces, default: %default");
   parser.add_option("-w", "--weight").action("store").type("double").set_default(1).help("plot file weight, default: %default (GB)");
   char const* const slevels[] = { "trace", "debug", "info", "warning", "error", "critical", "off" };
   parser.add_option("-l", "--level").choices(&slevels[0], &slevels[7]).action("store").type("string").set_default("info").help("log level, default: %default");
@@ -62,13 +65,13 @@ int main(int argc, char* argv[]) {
       for(auto& device : devices) {
         std::string type;
         if(device.type() & compute::device::gpu)
-            gpu_devices.push_back(device), (type = "GPU");
+          gpu_devices.push_back(device), (type = "GPU");
         else if(device.type() & compute::device::cpu)
-            cpu_devices.push_back(device), (type = "CPU");
+          cpu_devices.push_back(device), (type = "CPU");
         else if(device.type() & compute::device::accelerator)
-            type = "Accelerator";
+          type = "Accelerator";
         else
-            type = "Unknown";
+          type = "Unknown";
 
         COLOR_PRINT_Y("    {}: {}", type, device.name());
         if ((int)options.get("verbose") > 0) {
@@ -78,9 +81,9 @@ int main(int argc, char* argv[]) {
           if ((int)options.get("verbose") > 1) {
             auto&& ex = device.extensions();
             auto&& sex = accumulate(std::next(ex.begin()), ex.end(), *ex.begin(),
-                                          [](string &a, const string &b) -> decltype(auto) {
-                                            return  std::move(a) + ", " + b;
-                                          }); 
+                                    [](string &a, const string &b) -> decltype(auto) {
+                                      return  std::move(a) + ", " + b;
+                                    });
             COLOR_PRINT_Y("        extensions: {}", sex);
           }
           COLOR_PRINT_Y("        global_memory_size: {}", device.global_memory_size());
@@ -116,15 +119,21 @@ int main(int argc, char* argv[]) {
       COLOR_PRINT_R("directories:        [{}] `{}`", dirs.size(), directories);
     }
 
-    COLOR_PRINT_R("start nonce:          {}", (unsigned long)options.get("sn"));
-    COLOR_PRINT_R("start nonce:          {}", (unsigned long)options.get("verbose"));
-    auto total_size_gb = (unsigned long)options.get("num") * 8192. * 32 / 1024 / 1024 / 1024;
-    COLOR_PRINT_R("number of nonces:     {} ({} GB)", (unsigned long)options.get("num"), int(total_size_gb*100)/100.);
+    COLOR_PRINT_R("plot id:              {}", std::stoull(options["id"]));
+    COLOR_PRINT_R("start nonce:          {}", std::stoull(options["sn"]));
+    auto nonces = (uint32_t)std::stoull(options["num"]);
+    auto total_size_gb = nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
+    COLOR_PRINT_R("number of nonces:     {} ({} GB)", nonces, int(total_size_gb*100)/100.);
     COLOR_PRINT_R("plot weight:          {} GB", (double)options.get("weight"));
     COLOR_PRINT_R("number of plot files: {}", std::ceil(total_size_gb / (double)options.get("weight")));
 
     spdlog::set_level(spdlog::level::from_str((string)options.get("level")));
-    spdlog::set_pattern("[%H:%M:%S.%f][%t] %^%v%$");  
+    spdlog::set_pattern("[%H:%M:%S.%f][%t] %^%v%$");
+	
+	if ((int)options.get("test"))
+	  plotter(options).run();
+  } catch (std::exception& e) {
+    spdlog::error("prog exception: `{}`", e.what());
   } catch (...) {
     return -1;
   }
