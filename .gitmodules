@@ -1,6 +1,6 @@
 [submodule "contrib/cpp-optparse"]
 	path = contrib/cpp-optparse
-	url = https://github.com/weisslj/cpp-optparse.git
+	url = https://github.com/ventfang/cpp-optparse.git
 
 [submodule "contrib/spdlog"]
 	path = contrib/spdlog
