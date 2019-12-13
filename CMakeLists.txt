@@ -58,9 +58,8 @@ include_directories("${Boost_INCLUDE_DIRS}")
 
 find_package(OpenCL REQUIRED)
 
-include_directories("${PROJECT_BINARY_DIR}")
-include_directories("${PROJECT_SOURCE_DIR}")
 include_directories("${PROJECT_BINARY_DIR}/src")
+include_directories("${PROJECT_SOURCE_DIR}/src")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/cpp-optparse/")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/spdlog/include/")
