@@ -45,6 +45,8 @@ int main(int argc, char* argv[]) {
   parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(1).help("number of nonces, default: %default");
   parser.add_option("-w", "--weight").action("store").type("double").set_default(1).help("plot file weight, default: %default (GB)");
 
+
+  parser.add_option("--step").action("store").type("uint32_t").set_default(8192).help("hash calc batch, default: %default");
   parser.add_option("--gws").action("store").type("uint32_t").set_default(0).help("global work size, default: %default");
   parser.add_option("--lws").action("store").type("uint32_t").set_default(0).help("local work size, default: %default");
 

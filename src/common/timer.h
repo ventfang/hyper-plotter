@@ -9,7 +9,7 @@ public:
   explicit timer() : start_(std::chrono::high_resolution_clock::now()) {}
 
   template <typename Duration = std::chrono::milliseconds>
-  int elapsed() {
+  typename Duration::rep elapsed() {
     return std::chrono::duration_cast<Duration>(std::chrono::high_resolution_clock::now() - start_).count();
   }
 

@@ -422,7 +422,7 @@ __kernel void ploting(__global unsigned char* buffer, unsigned long startnonce, 
 	// init
 	unsigned long nonce_be = EndianSwap64(startnonce + gid);
 	// run 8192 rounds + final round 
-	for (int hash = NUM_HASHES - start; hash > -1 + NUM_HASHES - end; hash -= 1) {
+	for (int hash = start; hash > end; hash -= 1) {
 		// calculate number of shabal messages excl. final message
 		num = (NUM_HASHES - hash) >> 1; 
 		if (hash != 0) { 
@@ -525,7 +525,7 @@ __kernel void ploting(__global unsigned char* buffer, unsigned long startnonce, 
 	}
 
 	// final xor 
-	if(end==8192){
+	if(end==-1){
 		for (size_t i = 0; i < NUM_HASHES; i++){ 
 			((__global unsigned int*)buffer)[Address(gid, i, 0)] ^= B8;
 			((__global unsigned int*)buffer)[Address(gid, i, 1)] ^= B9;
