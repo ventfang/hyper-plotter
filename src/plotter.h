@@ -3,6 +3,7 @@
 #include <vector>
 #include <memory>
 #include <regex>
+#include <chrono>
 #include <boost/compute.hpp>
 
 #include <OptionParser.h>
@@ -17,6 +18,7 @@
 #include "task_writer.h"
 #include "worker_hasher.h"
 #include "worker_writer.h"
+#include "report.h"
 
 namespace compute = boost::compute;
 
@@ -145,6 +147,11 @@ private:
       pools.emplace_back([=](){ worker->run(); });
     }
 
+    // dispatcher
+    while (auto&& report = reporter_.pop_for(1000ms)) {
+
+    }
+
     for (auto& t : pools)
       t.join();
   }
@@ -153,4 +160,6 @@ private:
   optparse::Values& args_;
 
   std::vector<std::shared_ptr<worker>> workers_;
+  std::vector<std::shared_ptr<util::paged_block>> blocks_;
+  util::queue<report> reporter_;
 };

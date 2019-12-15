@@ -8,6 +8,7 @@
 #include "task_hasher.h"
 #include "poc/gpu_plotter.h"
 #include "common/queue.h"
+#include "common/timer.h"
 
 class plotter;
 class hasher_worker : public worker {
@@ -20,6 +21,21 @@ public:
 
   void run() override {
     spdlog::info("thread hasher worker `{}` starting.", plotter_->info());
+    while (auto task = hasher_tasks_.pop()) {
+      if (!task)
+        continue;
+      if (!task->block || !task->writer)
+        break;
+
+      // calc plot
+      util::timer timer;
+      plotter_->plot( task->pid
+                    , task->sn
+                    , task->nonces
+                    , task->block->data()
+                    );
+      task->writer->push_fin_hasher_task(std::move(task));
+    }
     spdlog::info("thread hasher worker `{}` stopped.", plotter_->info());
   }
   

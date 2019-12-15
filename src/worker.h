@@ -1,6 +1,8 @@
 #pragma once
 
-class worker {
+#include <memory>
+
+class worker : public std::enable_shared_from_this<worker> {
 public:
   worker() = default;
   virtual ~worker() = default;
