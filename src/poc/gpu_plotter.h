@@ -1,5 +1,6 @@
 #pragma once
 
+#include <sstream>
 #include <boost/compute.hpp>
 
 #include <spdlog/spdlog.h>
@@ -9,25 +10,32 @@
 namespace compute = boost::compute;
 
 struct gpu_plotter : public plotter_base {
+  struct args_t {
+    size_t lws;
+    size_t gws;
+    int step;
+  };
+  using args_t = struct args_t;
+
   gpu_plotter(gpu_plotter&) = delete;
   gpu_plotter(gpu_plotter&&) = delete;
   gpu_plotter& operator=(gpu_plotter&) = delete;
   gpu_plotter& operator=(gpu_plotter&&) = delete;
 
-  gpu_plotter(compute::device& device, size_t lws = 0, size_t gws = 0, int step = 32)
+  gpu_plotter(compute::device& device, args_t args)
     : device_{device}
     , context_{device} {
-    step_ = step ? step : 32;
+    step_ = args.step ? args.step : 32;
     auto cus = device_.compute_units();
     auto dims = device.max_work_item_dimensions();
-    local_work_size_ = lws;
-    lws = lws ? lws : device_.max_work_group_size();
-    global_work_size_ = gws ? gws : cus * lws;
-    spdlog::info("gpu_plotter {} cus:{}, dims: {}, gws: {}, lws: {}.", device.name(), cus, dims, global_work_size_, lws);
+    local_work_size_ = args.lws;
+    args.lws = args.lws ? args.lws : device_.max_work_group_size();
+    global_work_size_ = args.gws ? args.gws : cus * args.lws;
+    spdlog::info("gpu_plotter {} cus:{}, dims: {}, gws: {}, lws: {}.", device.name(), cus, dims, global_work_size_, args.lws);
     // TODO: check host free memory?
     auto max_nonces = size_t(device_.global_memory_size() * 0.9 / PLOT_SIZE);
     global_work_size_ = std::min(max_nonces, global_work_size_);
-    global_work_size_  = global_work_size_ / lws * lws;
+    global_work_size_  = global_work_size_ / args.lws * args.lws;
     assert(global_work_size_ >= 16);
     if (global_work_size_ < 16)
       global_work_size_ = 16;
@@ -77,6 +85,10 @@ struct gpu_plotter : public plotter_base {
   const compute::context& context() const { return context_; }
   const compute::program& program() const { return program_; }
   size_t global_work_size() const { return global_work_size_; }
+
+  std::string info() {
+    return device_.name();
+  }
 
 private:
   compute::device device_;

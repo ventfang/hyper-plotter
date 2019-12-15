@@ -1,0 +1,94 @@
+#pragma once
+
+#include <mutex>
+#include <deque>
+#include <atomic>
+#include <type_traits>
+
+namespace util {
+
+template<typename T>
+class queue {
+public:
+  queue() = default;
+  queue(queue&) = delete;
+  queue(queue&&) = delete;
+  queue& operator=(queue&) = delete;
+  queue& operator=(queue&&) = delete;
+
+  virtual ~queue() {
+    std::deque<T> q;
+    exit_.store(true);
+    size_.store(0);
+    {
+      std::unique_lock<std::mutex> lock(mux_);
+      q_.swap(q);
+    }
+    cond_.notify_all();
+  }
+
+  void push(T& v) {
+    {
+      std::unique_lock<std::mutex> lock(mux_);
+      q_.push_back(v);
+    }
+    size_.fetch_add(1);
+    cond_.notify_all();
+  }
+
+  void push(T&& v) {
+    {
+      std::unique_lock<std::mutex> lock(mux_);
+      q_.push_back(std::move(v));
+    }
+    size_.fetch_add(1);
+    cond_.notify_all();
+  }
+
+  T pop () {
+    if (size_.load() == 0)
+      return T();
+    std::unique_lock<std::mutex> lock(mux_);
+    whilt(!exit_) {
+      if (task_.empty()) {
+        cond_.wait(lock, [](){
+          return !task_.empty();
+        });
+        continue;
+      }
+      auto&& v = q_.front();
+      q_.pop_front();
+      size_.fetch_sub(1);
+      return v;
+    }
+  }
+
+  T pop_for (std::chrono::milliseconds ms) {
+    if (size_.load() == 0)
+      return T();
+    std::unique_lock<std::mutex> lock(mux_);
+    whilt(!exit_) {
+      if (task_.empty()) {
+        cond_.wait_for(lock, ms, [](){
+          return !task_.empty();
+        });
+        continue;
+      }
+      auto&& v = q_.front();
+      q_.pop_front();
+      size_.fetch_sub(1);
+      return v;
+    }
+  }
+
+  size_t size() { return size_.load(); }
+
+private:
+  std::mutex mux_;
+  std::condition_variable cond_;
+  std::deque<T> q_;
+  std::atomic<size_t> size_{0};
+  std::atomic<bool> exit_{false};
+};
+
+}
