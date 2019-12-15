@@ -69,9 +69,11 @@ public:
     std::unique_lock<std::mutex> lock(mux_);
     whilt(!exit_) {
       if (task_.empty()) {
-        cond_.wait_for(lock, ms, [](){
-          return !task_.empty();
-        });
+        if(std::cv_status::timeout == 
+          cond_.wait_for(lock, ms, [](){
+            return !task_.empty();
+          }))
+          return T();
         continue;
       }
       auto&& v = q_.front();
