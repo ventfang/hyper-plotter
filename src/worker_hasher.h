@@ -6,6 +6,7 @@
 
 #include "worker.h"
 #include "task_hasher.h"
+#include "worker_writer.h"
 #include "poc/gpu_plotter.h"
 #include "common/queue.h"
 #include "common/timer.h"
@@ -34,7 +35,8 @@ public:
                     , task->nonces
                     , task->block->data()
                     );
-      task->writer->push_fin_hasher_task(std::move(task));
+	  auto writer = std::dynamic_pointer_cast<writer_worker>(task->writer);
+    writer->push_fin_hasher_task(std::move(task));
     }
     spdlog::info("thread hasher worker `{}` stopped.", plotter_->info());
   }

@@ -45,14 +45,14 @@ public:
     cond_.notify_all();
   }
 
-  T pop () {
+  T pop() {
     if (size_.load() == 0)
       return T();
     std::unique_lock<std::mutex> lock(mux_);
-    whilt(!exit_) {
-      if (task_.empty()) {
-        cond_.wait(lock, [](){
-          return !task_.empty();
+    while(!exit_) {
+      if (q_.empty()) {
+        cond_.wait(lock, [this](){
+          return !q_.empty();
         });
         continue;
       }
@@ -61,17 +61,17 @@ public:
       size_.fetch_sub(1);
       return v;
     }
+    return T();
   }
 
-  T pop_for (std::chrono::milliseconds ms) {
+  T pop_for(std::chrono::milliseconds ms) {
     if (size_.load() == 0)
       return T();
     std::unique_lock<std::mutex> lock(mux_);
-    whilt(!exit_) {
-      if (task_.empty()) {
-        if(std::cv_status::timeout == 
-          cond_.wait_for(lock, ms, [](){
-            return !task_.empty();
+    while(!exit_) {
+      if (q_.empty()) {
+        if(cond_.wait_for(lock, ms, [this](){
+            return !q_.empty();
           }))
           return T();
         continue;
@@ -81,6 +81,7 @@ public:
       size_.fetch_sub(1);
       return v;
     }
+    return T();
   }
 
   size_t size() { return size_.load(); }

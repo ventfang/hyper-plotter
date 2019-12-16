@@ -148,7 +148,7 @@ private:
     }
 
     // dispatcher
-    while (auto&& report = reporter_.pop_for(1000ms)) {
+    while (auto& report = reporter_.pop_for(std::chrono::milliseconds(1000))) {
 
     }
 
