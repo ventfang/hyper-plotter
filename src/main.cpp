@@ -13,7 +13,6 @@ namespace compute = boost::compute;
 
 #include "config.h"
 #include "plotter.h"
-#include "common/signal.h"
 
 namespace opt = optparse;
 using namespace std;
@@ -33,8 +32,6 @@ const string version = "%prog " PARALLEL_PLOTER_VER " " GIT_BRANCH "-" GIT_COMMI
 const string desc = "The Parallel poc2 gpu ploter.";
 
 int main(int argc, char* argv[]) {
-  signal::get().install_signal();
-
   opt::OptionParser parser = opt::OptionParser()
     .usage(usage)
     .version(version)
@@ -45,7 +42,7 @@ int main(int argc, char* argv[]) {
   parser.add_option("-t", "--test").action("count").help("test mode, default: %default");
   parser.add_option("-i", "--id").action("store").type("uint64_t").set_default(0).help("plot id, default: %default");
   parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(0).help("start nonce, default: %default");
-  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(1).help("number of nonces, default: %default");
+  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(10000).help("number of nonces, default: %default");
   parser.add_option("-w", "--weight").action("store").type("double").set_default(1).help("plot file weight, default: %default (GB)");
   parser.add_option("-m", "--mem").action("store").type("double").set_default(1).help("memory to use, default: %default (GB)");
 
@@ -128,7 +125,7 @@ int main(int argc, char* argv[]) {
                                       [](string &a, const string &b) -> decltype(auto) {
                                         return  std::move(a) + ", " + b;
                                       });
-      COLOR_PRINT_R("directories:        [{}] `{}`", dirs.size(), directories);
+      COLOR_PRINT_R("directories:          [{}] ({})", dirs.size(), directories);
       options["drivers"] = directories;
     }
 

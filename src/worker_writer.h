@@ -1,12 +1,15 @@
 #pragma once
 
 #include <vector>
+#include <string>
+#include <sstream>
 #include <mutex>
 #include <spdlog/spdlog.h>
 
 #include "worker.h"
 #include "task_writer.h"
 #include "task_hasher.h"
+#include "common/signal.h"
 
 class plotter;
 class writer_worker : public worker {
@@ -20,22 +23,32 @@ public:
   void task_do(std::shared_ptr<writer_task>& task) {}
 
   void run() override {
-    spdlog::info("thread writer worker `{}` starting.", driver_);
-    while (auto task = fin_hasher_tasks_.pop()) {
+    spdlog::info("thread writer worker [{}] starting.", driver_);
+    while (! signal::get().stopped()) {
+      auto task = fin_hasher_tasks_.pop();
       if (!task)
         continue;
+      if (task->current_write_task == -1 || task->current_write_task >= writer_tasks_.size())
+        break;
       if (!task->block || !task->writer)
         break;
+
       // write plot
+      auto& wr_task = writer_tasks_[task->current_write_task];
+      spdlog::debug("write nonce [{}, {}) ({}) to `{}`", task->sn
+                   , task->sn+task->nonces
+                   , plotter_base::btoh(task->block->data(), 32)
+                   , wr_task->plot_file());
+      std::this_thread::sleep_for(std::chrono::milliseconds(5120));
     }
-    spdlog::info("thread writer worker `{}` stopped.", driver_);
+    spdlog::info("thread writer worker [{}] stopped.", driver_);
   }
   
   void push_task(std::shared_ptr<writer_task>&& task) { writer_tasks_.emplace_back(std::move(task)); }
 
   void push_fin_hasher_task(std::shared_ptr<hasher_task>&& task) { fin_hasher_tasks_.push(std::move(task)); }
 
-  std::shared_ptr<hasher_task> next_hasher_task(size_t gws) {
+  std::shared_ptr<hasher_task> next_hasher_task(int gws) {
     //std::unique_lock<std::mutex> lock(mux_);
     while (cur_writer_task_index_ < writer_tasks_.size()) {
       auto& wt = writer_tasks_[cur_writer_task_index_];
@@ -44,11 +57,30 @@ public:
         ++cur_writer_task_index_;
         continue;
       }
-      auto ht = std::make_shared<hasher_task>(wt->pid, wt->sn, nonces, shared_from_this(), nullptr);
+      auto ht = std::make_shared<hasher_task>(wt->pid, wt->sn, nonces
+                                            , shared_from_this()
+                                            , cur_writer_task_index_
+                                            , nullptr);
       return ht;
     }
     return {nullptr};
   }
+
+  std::string info() override {
+    std::stringstream ss;
+    ss << "writer [" << driver_ << "] (";
+    if (writer_tasks_.size())
+      ss << std::accumulate(std::next(writer_tasks_.begin())
+                          , writer_tasks_.end()
+                          , writer_tasks_[0]->plot_file()
+                          , [](std::string &a, const std::shared_ptr<writer_task> &b) -> decltype(auto) {
+                              return  std::move(a) + ", " + b->plot_file();
+                            });
+    ss << ")";
+    return ss.str();
+  }
+
+  size_t writer_task_count() const { return writer_tasks_.size(); }
 
 private:
   plotter& ctx_;

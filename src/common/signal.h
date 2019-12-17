@@ -29,7 +29,7 @@ public:
 
   void signal_stop() { sig_stop_.store(true); }
 
-  bool stopped() { sig_stop_.load(); }
+  bool stopped() { return sig_stop_.load(); }
 
 private:
   std::atomic<bool> sig_stop_;

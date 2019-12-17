@@ -12,4 +12,5 @@ public:
   worker& operator=(worker&&) = delete;
 
   virtual void run() = 0;
+  virtual std::string info() = 0;
 };

@@ -12,6 +12,7 @@
 #include "common/paged_block.h"
 #include "common/queue.h"
 #include "common/timer.h"
+#include "common/signal.h"
 #include "poc/cpu_plotter.h"
 #include "poc/gpu_plotter.h"
 #include "task_hasher.h"
@@ -76,8 +77,8 @@ private:
                 , (uint8_t*)buff.data()
                 );
     spdlog::info("gpu plot time cost: {} ms.", timer2.elapsed());
-    auto ghash = gplot.to_string((uint8_t*)buff.data(), buff.size());
-    spdlog::info("gpu plot hash: 0x{}", ghash.substr(0, 64));
+    auto ghash = gplot.to_string((uint8_t*)buff.data(), 32);
+    spdlog::info("gpu plot hash: 0x{}", ghash);
   }
 
   void run_test_mem() {
@@ -91,7 +92,7 @@ private:
   }
 
   void run_plotter() {
-    auto dev = compute::system::default_device();
+    signal::get().install_signal();
     auto plot_id = std::stoull(args_["id"]);
     auto start_nonce = std::stoull(args_["sn"]);
     auto total_nonces = std::stoull(args_["num"]);
@@ -105,25 +106,27 @@ private:
       std::sregex_token_iterator()
     };
     if (patharg.empty() || drivers.empty()) {
-      spdlog::warn("No dirver specified. exit!!!");
+      spdlog::warn("No dirver(directory) specified. exit!!!");
       return;
     }
 
     // TODO: calc by free space
     // TODO: padding
     auto max_nonces_per_file = max_weight_per_file / plotter_base::PLOT_SIZE;
-    auto total_files = std::ceil(total_nonces / max_nonces_per_file);
-    auto files_per_driver = std::ceil(total_files / drivers.size());
+    auto total_files = std::ceil(total_nonces * 1. / max_nonces_per_file);
+    auto max_files_per_driver = std::ceil(total_files * 1. / drivers.size());
 
     // init writer worker and task
+    auto sn_to_gen = start_nonce;
+    auto nonces_to_gen = total_nonces;
     for (auto& driver : drivers) {
       auto worker = std::make_shared<writer_worker>(*this, driver);
       workers_.push_back(worker);
-      for (int i=0; i<files_per_driver && total_nonces>0; ++i) {
-        int32_t nonces = (int32_t)std::min(total_nonces, max_nonces_per_file);
-        auto task = std::make_shared<writer_task>(plot_id, start_nonce, nonces, driver);
-        start_nonce += nonces;
-        total_nonces -= nonces;
+      for (int i=0; i<max_files_per_driver && nonces_to_gen>0; ++i) {
+        int32_t nonces = (int32_t)std::min(nonces_to_gen, max_nonces_per_file);
+        auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, nonces, driver);
+        sn_to_gen += nonces;
+        nonces_to_gen -= nonces;
         worker->push_task(std::move(task));
       }
     }
@@ -141,19 +144,25 @@ private:
     auto worker = std::make_shared<hasher_worker>(*this, ploter);
     workers_.push_back(worker);
 
-    spdlog::info("Plotting......");
+    spdlog::info("Plotting {} - [{} {}) ...", plot_id, start_nonce, start_nonce+total_nonces);
+    for (auto& w : workers_) {
+      spdlog::info(w->info());
+    }
+
     std::vector<std::thread> pools;
     for (auto& worker : workers_) {
       pools.emplace_back([=](){ worker->run(); });
     }
 
     // dispatcher
-    while (auto& report = reporter_.pop_for(std::chrono::milliseconds(1000))) {
-
+    while (! signal::get().stopped()) {
+      auto& report = reporter_.pop_for(std::chrono::milliseconds(1000));
     }
 
+    spdlog::info("dispatcher thread stopped!!!");
     for (auto& t : pools)
       t.join();
+    spdlog::info("all worker thread stopped!!!");
   }
 
 private:

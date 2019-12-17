@@ -30,8 +30,8 @@ struct gpu_plotter : public plotter_base {
     auto dims = device.max_work_item_dimensions();
     local_work_size_ = args.lws;
     args.lws = args.lws ? args.lws : device_.max_work_group_size();
+    local_work_size2_ = args.lws;
     global_work_size_ = args.gws ? args.gws : cus * args.lws;
-    spdlog::info("gpu_plotter {} cus:{}, dims: {}, gws: {}, lws: {}.", device.name(), cus, dims, global_work_size_, args.lws);
     // TODO: check host free memory?
     auto max_nonces = size_t(device_.global_memory_size() * 0.9 / PLOT_SIZE);
     global_work_size_ = std::min(max_nonces, global_work_size_);
@@ -39,12 +39,11 @@ struct gpu_plotter : public plotter_base {
     assert(global_work_size_ >= 16);
     if (global_work_size_ < 16)
       global_work_size_ = 16;
-    spdlog::info("gpu_plotter gws: {}, lws: {}.", global_work_size_, local_work_size_);
   }
 
   bool init(const std::string& kernel, const std::string& name) {
-    program_ = compute::program::create_with_source_file(kernel, context_);
     try {
+      program_ = compute::program::create_with_source_file(kernel, context_);
       program_.build();
     } catch(...) {
       return false;
@@ -87,7 +86,12 @@ struct gpu_plotter : public plotter_base {
   size_t global_work_size() const { return global_work_size_; }
 
   std::string info() {
-    return device_.name();
+    std::stringstream ss;
+    ss << "[" <<device_.name() << "] " << device_.compute_units()<< "-"
+       << global_work_size_ << "-"
+       << local_work_size_ << " ("
+       << local_work_size2_ << ")";
+    return ss.str();
   }
 
 private:
@@ -101,4 +105,5 @@ private:
   int step_{ 32 };
   size_t global_work_size_{0};
   size_t local_work_size_{0};
+  size_t local_work_size2_{0};
 };
