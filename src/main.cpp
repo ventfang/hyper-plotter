@@ -13,6 +13,7 @@ namespace compute = boost::compute;
 
 #include "config.h"
 #include "plotter.h"
+#include "common/signal.h"
 
 namespace opt = optparse;
 using namespace std;
@@ -32,6 +33,8 @@ const string version = "%prog " PARALLEL_PLOTER_VER " " GIT_BRANCH "-" GIT_COMMI
 const string desc = "The Parallel poc2 gpu ploter.";
 
 int main(int argc, char* argv[]) {
+  signal::get().install_signal();
+
   opt::OptionParser parser = opt::OptionParser()
     .usage(usage)
     .version(version)
