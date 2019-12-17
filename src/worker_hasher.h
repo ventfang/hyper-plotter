@@ -45,7 +45,7 @@ public:
     spdlog::info("thread hasher worker [{}] stopped.", plotter_->info());
   }
   
-  void push_task(std::shared_ptr<hasher_task> task) { hasher_tasks_.push(task); }
+  void push_task(std::shared_ptr<hasher_task>&& task) { hasher_tasks_.push(std::move(task)); }
 
   std::string info() override { return std::string("hasher ") + plotter_->info(); }
 

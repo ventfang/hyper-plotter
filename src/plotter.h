@@ -13,6 +13,7 @@
 #include "common/queue.h"
 #include "common/timer.h"
 #include "common/signal.h"
+#include "common/utils.h"
 #include "poc/cpu_plotter.h"
 #include "poc/gpu_plotter.h"
 #include "task_hasher.h"
@@ -34,9 +35,7 @@ public:
   plotter(optparse::Values& args) : args_{args} {}
 
   void run() {
-    if ((int)args_.get("testmem")) {
-      run_test_mem();
-    } else if ((int)args_.get("plot")) {
+    if ((int)args_.get("plot")) {
       run_plotter();
     } else if ((int)args_.get("test")) {
       run_test();
@@ -81,16 +80,6 @@ private:
     spdlog::info("gpu plot hash: 0x{}", ghash);
   }
 
-  void run_test_mem() {
-    util::queue<util::paged_block> q;
-    auto mem = uint64_t((double)std::stod(args_["mem"]) * 1024) * 1024 * 1024;
-    mem &= ((uint64_t)-1) ^ (plotter_base::PLOT_SIZE - 1);
-    spdlog::info("allocate memory: {} bytes ({} GB) ", mem, args_["mem"]);
-    util::paged_block block(mem);
-    spdlog::info("allocated memory: {:x} {}", (uint64_t)block.data(), block.len());
-    q.push(std::move(block));
-  }
-
   void run_plotter() {
     signal::get().install_signal();
     auto plot_id = std::stoull(args_["id"]);
@@ -98,6 +87,7 @@ private:
     auto total_nonces = std::stoull(args_["num"]);
     auto max_mem_to_use = uint64_t((double)std::stod(args_["mem"]) * 1024) * 1024 * 1024;
     auto max_weight_per_file = uint64_t((double)std::stod(args_["weight"]) * 1024) * 1024 * 1024;
+    util::block_allocator page_block_allocator{max_mem_to_use};
     
     auto patharg = args_["drivers"];
     std::regex re{", "};
@@ -141,8 +131,8 @@ private:
     auto res = ploter->init("./kernel/kernel.cl", "ploting");
     if (!res)
       spdlog::error("init gpu plotter failed. kernel build log: {}", ploter->program().build_log());
-    auto worker = std::make_shared<hasher_worker>(*this, ploter);
-    workers_.push_back(worker);
+    auto hashing = std::make_shared<hasher_worker>(*this, ploter);
+    workers_.push_back(hashing);
 
     spdlog::info("Plotting {} - [{} {}) ...", plot_id, start_nonce, start_nonce+total_nonces);
     for (auto& w : workers_) {
@@ -155,8 +145,24 @@ private:
     }
 
     // dispatcher
+    int cur_worker_pos{0}, max_worker_pos{(int)workers_.size()-1};
     while (! signal::get().stopped()) {
-      auto& report = reporter_.pop_for(std::chrono::milliseconds(1000));
+      auto& report = reporter_.pop_for(std::chrono::milliseconds(100));
+      if (workers_.size() == 0)
+        continue;
+
+      auto& nb = page_block_allocator.allocate(ploter->global_work_size());
+      if (! nb)
+        continue;
+
+      if (cur_worker_pos >= max_worker_pos)
+        cur_worker_pos = 0;
+      auto wr_worker = std::dynamic_pointer_cast<writer_worker>(workers_[cur_worker_pos++]);
+      auto ht = wr_worker->next_hasher_task((int)(ploter->global_work_size()), nb);
+      if (! ht) {
+        page_block_allocator.retain(nb);
+      }
+      hashing->push_task(std::move(ht));
     }
 
     spdlog::info("dispatcher thread stopped!!!");

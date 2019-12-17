@@ -48,7 +48,7 @@ public:
 
   void push_fin_hasher_task(std::shared_ptr<hasher_task>&& task) { fin_hasher_tasks_.push(std::move(task)); }
 
-  std::shared_ptr<hasher_task> next_hasher_task(int gws) {
+  std::shared_ptr<hasher_task> next_hasher_task(int gws, util::paged_block& block) {
     //std::unique_lock<std::mutex> lock(mux_);
     while (cur_writer_task_index_ < writer_tasks_.size()) {
       auto& wt = writer_tasks_[cur_writer_task_index_];
@@ -60,7 +60,7 @@ public:
       auto ht = std::make_shared<hasher_task>(wt->pid, wt->sn, nonces
                                             , shared_from_this()
                                             , cur_writer_task_index_
-                                            , nullptr);
+                                            , &block);
       return ht;
     }
     return {nullptr};
