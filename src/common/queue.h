@@ -46,17 +46,15 @@ public:
   }
 
   T pop() {
-    if (size_.load() == 0)
-      return T();
     std::unique_lock<std::mutex> lock(mux_);
     while(!exit_) {
       if (q_.empty()) {
         cond_.wait(lock, [this](){
-          return !q_.empty();
+          return !q_.empty() || exit_;
         });
         continue;
       }
-      auto&& v = q_.front();
+      auto v = q_.front();
       q_.pop_front();
       size_.fetch_sub(1);
       return v;
@@ -65,13 +63,11 @@ public:
   }
 
   T pop_for(std::chrono::milliseconds ms) {
-    if (size_.load() == 0)
-      return T();
     std::unique_lock<std::mutex> lock(mux_);
     while(!exit_) {
       if (q_.empty()) {
-        if(cond_.wait_for(lock, ms, [this](){
-            return !q_.empty();
+        if(! cond_.wait_for(lock, ms, [this](){
+            return !q_.empty() || exit_;
           }))
           return T();
         continue;
@@ -86,6 +82,11 @@ public:
 
   size_t size() { return size_.load(); }
 
+  void stop() {
+    exit_.store(true);
+    cond_.notify_all();
+  }
+  
 private:
   std::mutex mux_;
   std::condition_variable cond_;

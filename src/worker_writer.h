@@ -35,7 +35,9 @@ public:
 
       // write plot
       auto& wr_task = writer_tasks_[task->current_write_task];
-      spdlog::debug("write nonce [{}, {}) ({}) to `{}`", task->sn
+      spdlog::debug("write nonce [{}][{}, {}) ({}) to `{}`"
+                   , task->current_write_task
+                   , task->sn
                    , task->sn+task->nonces
                    , plotter_base::btoh(task->block->data(), 32)
                    , wr_task->plot_file());
@@ -82,6 +84,12 @@ public:
 
   size_t writer_task_count() const { return writer_tasks_.size(); }
 
+  void stop() override {
+    fin_hasher_tasks_.stop();
+  }
+
+  size_t task_queue_size() override { return fin_hasher_tasks_.size(); }
+  
 private:
   plotter& ctx_;
   std::string driver_;

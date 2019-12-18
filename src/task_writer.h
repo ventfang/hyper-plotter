@@ -25,11 +25,15 @@ struct writer_task {
   }
 
   std::string plot_file() {
+    if (pf_.size())
+      return pf_;
     std::stringstream ss;
     ss << pid << "_" << sn << "_" << nonces;
-    return ss.str();
+    pf_ = ss.str();
+    return pf_;
   }
 
 private:
   uint64_t prev_{0};
+  std::string pf_;
 };

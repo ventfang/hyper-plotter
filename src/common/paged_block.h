@@ -69,9 +69,9 @@ public:
 
   ~block_allocator() {
     for (auto& block : free_blocks_)
-      operator delete[](block.second.data(), block.second.len());
+      operator delete[](block.second.data(), paged_block::page_size);
     for (auto& block : used_blocks_)
-      operator delete[](block.second.data(), block.second.len());
+      operator delete[](block.second.data(), paged_block::page_size);
     free_blocks_.swap(decltype(free_blocks_)());
     used_blocks_.swap(decltype(used_blocks_)());
     total_allocated_ = 0;
@@ -87,10 +87,11 @@ public:
 
     if (it == free_blocks_.end()) {
       auto allocated_mem = total_allocated_ + len;
-      if (allocated_mem > max_mem_ || sys_free_mem_bytes() > len)
+      if (allocated_mem > max_mem_ || sys_free_mem_bytes() < len)
         return dummy_block;
       auto nbytes = (uint8_t*) operator new[](len, paged_block::page_size);
-      assert(uint64_t(nbytes) & 0xfff == 0);
+      auto test = (uint64_t(nbytes) & 0xfff);
+      assert(test == 0);
       auto nb = paged_block(nbytes, len);
       total_allocated_ = allocated_mem;
       auto key = nb.data();

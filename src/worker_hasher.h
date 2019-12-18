@@ -40,6 +40,10 @@ public:
                     , task->block->data()
                     );
       auto writer = std::dynamic_pointer_cast<writer_worker>(task->writer);
+      spdlog::debug("establised hash [{}][{} {}) {}", task->current_write_task
+                                                    , task->sn
+                                                    , task->sn + task->nonces
+                                                    , task->writer->info());
       writer->push_fin_hasher_task(std::move(task));
     }
     spdlog::info("thread hasher worker [{}] stopped.", plotter_->info());
@@ -49,6 +53,12 @@ public:
 
   std::string info() override { return std::string("hasher ") + plotter_->info(); }
 
+  void stop() override {
+    hasher_tasks_.stop();
+  }
+
+  size_t task_queue_size() override { return hasher_tasks_.size(); }
+  
 private:
   plotter& ctx_;
   std::shared_ptr<gpu_plotter> plotter_;

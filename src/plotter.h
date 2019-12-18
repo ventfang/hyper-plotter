@@ -145,13 +145,30 @@ private:
     }
 
     // dispatcher
+    util::timer plot_timer;
     int cur_worker_pos{0}, max_worker_pos{(int)workers_.size()-1};
+    int dispatched_nonces{ 0 };
+    int finished_nonces{ 0 };
     while (! signal::get().stopped()) {
-      auto& report = reporter_.pop_for(std::chrono::milliseconds(100));
+      auto& report = reporter_.pop_for(std::chrono::milliseconds(1000));
+      if (report) {
+        //finished_nonces += report->nonces;
+      }
       if (workers_.size() == 0)
         continue;
+      if (finished_nonces == total_nonces) {
+        spdlog::info("Ploting finished!!!");
+        break;
+      }
+      if (dispatched_nonces == total_nonces) {
+        spdlog::info("Ploting dispatched!!!");
+        break;
+      }
+      
+      if (hashing->task_queue_size() > workers_.size() * 2.6)
+        continue;
 
-      auto& nb = page_block_allocator.allocate(ploter->global_work_size());
+      auto& nb = page_block_allocator.allocate(ploter->global_work_size() * plotter_base::PLOT_SIZE);
       if (! nb)
         continue;
 
@@ -161,10 +178,21 @@ private:
       auto ht = wr_worker->next_hasher_task((int)(ploter->global_work_size()), nb);
       if (! ht) {
         page_block_allocator.retain(nb);
+        continue;
       }
+      dispatched_nonces += ht->nonces;
+      spdlog::debug("submit task [{}][{} {}) {}", ht->current_write_task
+                                                , ht->sn
+                                                , ht->sn + ht->nonces
+                                                , ht->writer->info());
       hashing->push_task(std::move(ht));
     }
 
+    signal::get().signal_stop();
+    for (auto& w : workers_)
+      w->stop();
+
+    spdlog::warn("FINISHED PLOTTING at {} nonces/min.", dispatched_nonces * 60. * 1000. / plot_timer.elapsed());
     spdlog::info("dispatcher thread stopped!!!");
     for (auto& t : pools)
       t.join();
