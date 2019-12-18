@@ -22,29 +22,7 @@ public:
 
   void task_do(std::shared_ptr<writer_task>& task) {}
 
-  void run() override {
-    spdlog::info("thread writer worker [{}] starting.", driver_);
-    while (! signal::get().stopped()) {
-      auto task = fin_hasher_tasks_.pop();
-      if (!task)
-        continue;
-      if (task->current_write_task == -1 || task->current_write_task >= writer_tasks_.size())
-        break;
-      if (!task->block || !task->writer)
-        break;
-
-      // write plot
-      auto& wr_task = writer_tasks_[task->current_write_task];
-      spdlog::debug("write nonce [{}][{}, {}) ({}) to `{}`"
-                   , task->current_write_task
-                   , task->sn
-                   , task->sn+task->nonces
-                   , plotter_base::btoh(task->block->data(), 32)
-                   , wr_task->plot_file());
-      std::this_thread::sleep_for(std::chrono::milliseconds(5120));
-    }
-    spdlog::info("thread writer worker [{}] stopped.", driver_);
-  }
+  void run() override;
   
   void push_task(std::shared_ptr<writer_task>&& task) { writer_tasks_.emplace_back(std::move(task)); }
 
@@ -70,15 +48,7 @@ public:
 
   std::string info() override {
     std::stringstream ss;
-    ss << "writer [" << driver_ << "] (";
-    if (writer_tasks_.size())
-      ss << std::accumulate(std::next(writer_tasks_.begin())
-                          , writer_tasks_.end()
-                          , writer_tasks_[0]->plot_file()
-                          , [](std::string &a, const std::shared_ptr<writer_task> &b) -> decltype(auto) {
-                              return  std::move(a) + ", " + b->plot_file();
-                            });
-    ss << ")";
+    ss << "writer [" << driver_ << "]";
     return ss.str();
   }
 

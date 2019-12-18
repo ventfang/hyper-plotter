@@ -111,6 +111,10 @@ public:
     used_blocks_.erase(key);
   }
 
+  size_t size() {
+    return free_blocks_.size() + used_blocks_.size();
+  }
+
 private:
   std::unordered_map<uint8_t*, paged_block> free_blocks_;
   std::unordered_map<uint8_t*, paged_block> used_blocks_;

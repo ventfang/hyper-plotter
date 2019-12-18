@@ -5,7 +5,7 @@ namespace util {
 #ifdef WIN32
 #include <windows.h>
 
-size_t sys_free_mem_bytes()
+static size_t sys_free_mem_bytes()
 {
   MEMORYSTATUSEX status;
   status.dwLength = sizeof(status);
