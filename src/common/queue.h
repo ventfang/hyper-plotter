@@ -72,7 +72,7 @@ public:
           return T();
         continue;
       }
-      auto&& v = q_.front();
+      auto v = q_.front();
       q_.pop_front();
       size_.fetch_sub(1);
       return v;

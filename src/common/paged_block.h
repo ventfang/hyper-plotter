@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <stdint.h>
 #include <cstdlib>
-
+#include <spdlog/spdlog.h>
 #include "utils.h"
 
 namespace util {
@@ -85,23 +85,28 @@ public:
       }
     }
 
-    if (it == free_blocks_.end()) {
-      auto allocated_mem = total_allocated_ + len;
-      if (allocated_mem > max_mem_ || sys_free_mem_bytes() < len)
-        return dummy_block;
-      auto nbytes = (uint8_t*) operator new[](len, paged_block::page_size);
-      auto test = (uint64_t(nbytes) & 0xfff);
-      assert(test == 0);
-      auto nb = paged_block(nbytes, len);
-      total_allocated_ = allocated_mem;
-      auto key = nb.data();
-      used_blocks_.emplace(key, std::move(nb));
-      return used_blocks_[key];
-    } else {
-      auto key = it->second.data();
-      used_blocks_.emplace(key, std::move(it->second));
-      free_blocks_.erase(it);
-      return used_blocks_[key];
+    try {
+      if (it == free_blocks_.end()) {
+        auto allocated_mem = total_allocated_ + len;
+        if (allocated_mem > max_mem_ || sys_free_mem_bytes() < len)
+          return dummy_block;
+        auto nbytes = (uint8_t*) operator new[](len, paged_block::page_size);
+        auto test = (uint64_t(nbytes) & 0xfff);
+        assert(test == 0);
+        auto nb = paged_block(nbytes, len);
+        total_allocated_ = allocated_mem;
+        auto key = nb.data();
+        used_blocks_.emplace(key, std::move(nb));
+        return used_blocks_[key];
+      } else {
+        auto key = it->second.data();
+        used_blocks_.emplace(key, std::move(it->second));
+        free_blocks_.erase(it);
+        return used_blocks_[key];
+      }
+    } catch(std::exception& e) {
+      spdlog::error("allocation exception: {}.", e.what());
+      return dummy_block;
     }
   }
 

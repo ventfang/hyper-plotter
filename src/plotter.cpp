@@ -122,10 +122,13 @@ void plotter::run_plotter() {
   while (! signal::get().stopped()) {
     auto report = reporter_.pop_for(std::chrono::milliseconds(1000));
     if (report) {
+      page_block_allocator.retain(*report->block);
       finished_nonces += report->nonces;
       ++finished_count;
-      spdlog::warn("PLOTTING at {}|{} nonces/min", dispatched_nonces * 60ull * 1000 / plot_timer.elapsed()
-                                                 , finished_nonces * 60ull * 1000 / plot_timer.elapsed());
+      spdlog::warn("[{}%] PLOTTING at {}|{} nonces/min."
+                , int(finished_count * 100.) / total_count
+                , dispatched_nonces * 60ull * 1000 / plot_timer.elapsed()
+                , finished_nonces * 60ull * 1000 / plot_timer.elapsed());
     }
     if (workers_.size() == 0)
       continue;
@@ -144,14 +147,13 @@ void plotter::run_plotter() {
     if (cur_worker_pos >= max_worker_pos)
       cur_worker_pos = 0;
 
-    auto wr_worker = std::dynamic_pointer_cast<writer_worker>(workers_[cur_worker_pos]);
+    auto wr_worker = std::dynamic_pointer_cast<writer_worker>(workers_[cur_worker_pos++]);
     if (wr_worker->task_queue_size() > 1)
       continue;
     auto& nb = page_block_allocator.allocate(ploter->global_work_size() * plotter_base::PLOT_SIZE);
     if (! nb)
       continue;
 
-    ++cur_worker_pos;
     auto ht = wr_worker->next_hasher_task((int)(ploter->global_work_size()), nb);
     if (! ht) {
       page_block_allocator.retain(nb);
@@ -171,13 +173,12 @@ void plotter::run_plotter() {
   for (auto& w : workers_)
     w->stop();
 
-  spdlog::warn("FINISHED PLOTTING at {} nonces/min.", dispatched_nonces * 60. * 1000. / plot_timer.elapsed());
+  spdlog::warn("FINISHED PLOTTING at {} nonces/min.", dispatched_nonces * 60ull * 1000 / plot_timer.elapsed());
   spdlog::info("allocated blocks: {}.", page_block_allocator.size());
   spdlog::info("dispatcher thread stopped!!!");
   for (auto& t : pools)
     t.join();
   spdlog::info("all worker thread stopped!!!");
-  std::this_thread::sleep_for(std::chrono::seconds(3));
 }
 
 void plotter::report(std::shared_ptr<hasher_task>&& task) { reporter_.push(std::move(task)); }
