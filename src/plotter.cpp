@@ -139,7 +139,7 @@ void plotter::run_plotter() {
     }
     if (dispatched_nonces == total_nonces) {
       spdlog::info("Ploting dispatched!!!");
-      break;
+      continue;
     }
     
     if (hashing->task_queue_size() > std::min(workers_.size(), 3llu))

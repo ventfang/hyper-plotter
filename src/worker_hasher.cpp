@@ -24,20 +24,23 @@ void hasher_worker::run() {
       break;
 
     // calc plot
-    util::timer timer;
     if ((bench_mode & 0x02) == 0)
       plotter_->plot( task->pid
                     , task->sn
                     , task->nonces
                     , task->block->data()
                     );
-    auto writer = std::dynamic_pointer_cast<writer_worker>(task->writer);
-    spdlog::debug("establised hash [{}][{} {}) {}", task->current_write_task
-                                                  , task->sn
-                                                  , task->sn + task->nonces
-                                                  , task->writer->info());
-    writer->push_fin_hasher_task(std::move(task));
+    report(task);
   }
+
   spdlog::info("thread hasher worker [{}] stopped.", plotter_->info());
 }
-  
+
+void hasher_worker::report(std::shared_ptr<hasher_task>& task) {
+  auto writer = std::dynamic_pointer_cast<writer_worker>(task->writer);
+  spdlog::debug("establised hash [{}][{} {}) {}", task->current_write_task
+                                                , task->sn
+                                                , task->sn + task->nonces
+                                                , task->writer->info());
+  writer->push_fin_hasher_task(std::move(task));
+}

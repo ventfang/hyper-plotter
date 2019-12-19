@@ -23,6 +23,8 @@ public:
 
   void run() override;
 
+  void report(std::shared_ptr<hasher_task>& task);
+
   void push_task(std::shared_ptr<hasher_task>&& task) { hasher_tasks_.push(std::move(task)); }
 
   std::string info(bool detail = false) override { return std::string("hasher ") + plotter_->info(); }

@@ -33,7 +33,7 @@ struct gpu_plotter : public plotter_base {
     local_work_size2_ = args.lws;
     global_work_size_ = args.gws ? args.gws : cus * args.lws;
     // TODO: check host free memory?
-    auto max_nonces = size_t(device_.global_memory_size() * 0.9 / PLOT_SIZE);
+    auto max_nonces = size_t(device_.max_memory_alloc_size() / PLOT_SIZE);
     global_work_size_ = std::min(max_nonces, global_work_size_);
     global_work_size_  = global_work_size_ / args.lws * args.lws;
     assert(global_work_size_ >= 16);
@@ -51,14 +51,15 @@ struct gpu_plotter : public plotter_base {
       return false;
     }
     cqueue_ = compute::command_queue{context_, device_};
-    dev_buff_ = compute::buffer{context_, global_work_size_ * PLOT_SIZE};
+    dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
+    dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
     kernel_ = compute::kernel{program_, name};
-    kernel_.set_arg(0, dev_buff_);
     return true;
   }
 
   void plot(uint64_t plot_id, uint64_t start_nonce, size_t nonces, uint8_t* host_buff) {
     nonces = std::min(nonces, global_work_size_);
+    kernel_.set_arg(0, dev_buff_[0]);
     kernel_.set_arg(1, start_nonce);
     kernel_.set_arg(2, hton_ull(plot_id));
     kernel_.set_arg(5, nonces);
@@ -73,7 +74,7 @@ struct gpu_plotter : public plotter_base {
         cqueue_.enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_);
       }
       cqueue_.finish();
-      cqueue_.enqueue_read_buffer(dev_buff_, 0, nonces*PLOT_SIZE, host_buff);
+      cqueue_.enqueue_read_buffer(dev_buff_[0], 0, nonces*PLOT_SIZE, host_buff);
     } catch(compute::opencl_error& e) {
       spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
       throw e;
@@ -91,7 +92,7 @@ struct gpu_plotter : public plotter_base {
     std::stringstream ss;
     ss << "[" <<device_.name() << "] " << device_.compute_units()<< "-"
        << global_work_size_ << "-"
-       << local_work_size_ << " ("
+       << local_work_size_ << "("
        << local_work_size2_ << ")";
     return ss.str();
   }
@@ -102,7 +103,8 @@ private:
   compute::program program_;
   compute::kernel kernel_;
   compute::command_queue cqueue_;
-  compute::buffer dev_buff_;
+  std::vector<compute::buffer> dev_buff_;
+  int working_dev_buff_{0};
 
   int step_{ 32 };
   size_t global_work_size_{0};
