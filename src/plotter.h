@@ -38,6 +38,8 @@ public:
 
   void report(std::shared_ptr<hasher_task>&& task);
   
+  int bench_mode() { return (int)args_.get("bench"); }
+
 private:
   void run_test();
 

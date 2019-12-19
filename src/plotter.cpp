@@ -126,7 +126,7 @@ void plotter::run_plotter() {
       finished_nonces += report->nonces;
       ++finished_count;
       spdlog::warn("[{}%] PLOTTING at {}|{} nonces/min."
-                , int(finished_count * 100.) / total_count
+                , uint64_t(finished_nonces * 100.) / total_nonces
                 , dispatched_nonces * 60ull * 1000 / plot_timer.elapsed()
                 , finished_nonces * 60ull * 1000 / plot_timer.elapsed());
     }
@@ -161,11 +161,15 @@ void plotter::run_plotter() {
     }
     dispatched_nonces += ht->nonces;
     ++dispatched_count;
-    spdlog::debug("submit task ({}/{}/{}) [{}][{} {}) {}", dispatched_count, finished_count, total_count
-                                              , ht->current_write_task
-                                              , ht->sn
-                                              , ht->sn + ht->nonces
-                                              , ht->writer->info());
+    spdlog::debug("[{}] submit task ({}/{}/{}) [{}][{} {}) {}"
+                , hashing->task_queue_size()
+                , dispatched_count
+                , finished_count
+                , total_count
+                , ht->current_write_task
+                , ht->sn
+                , ht->sn + ht->nonces
+                , ht->writer->info());
     hashing->push_task(std::move(ht));
   }
 
@@ -174,6 +178,7 @@ void plotter::run_plotter() {
     w->stop();
 
   spdlog::warn("FINISHED PLOTTING at {} nonces/min.", dispatched_nonces * 60ull * 1000 / plot_timer.elapsed());
+  spdlog::warn("Total Nonces Generated: {}, time elapsed {} mins", finished_nonces, int(plot_timer.elapsed() / 60.) / 1000.);
   spdlog::info("allocated blocks: {}.", page_block_allocator.size());
   spdlog::info("dispatcher thread stopped!!!");
   for (auto& t : pools)

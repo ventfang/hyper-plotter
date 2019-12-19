@@ -53,6 +53,8 @@ int main(int argc, char* argv[]) {
 
   char const* const slevels[] = { "trace", "debug", "info", "warning", "error", "critical", "off" };
   parser.add_option("-l", "--level").choices(&slevels[0], &slevels[7]).action("store").type("string").set_default("info").help("log level, default: %default");
+  char const* const benchmode[] = { "disabled", "debug", "info", "warning", "error", "critical", "off" };
+  parser.add_option("-b", "--bench").action("store").type("uint32_t").set_default(0).help("bench mode, default: %default");
 
   try {
     opt::Values& options = parser.parse_args(argc, argv);
