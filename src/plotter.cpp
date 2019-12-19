@@ -101,9 +101,9 @@ void plotter::run_plotter() {
   auto hashing = std::make_shared<hasher_worker>(*this, ploter);
   workers_.push_back(hashing);
 
-  spdlog::info("Plotting {} - [{} {}) ...", plot_id, start_nonce, start_nonce+total_nonces);
+  spdlog::warn("Plotting {} - [{} {}) ...", plot_id, start_nonce, start_nonce+total_nonces);
   for (auto& w : workers_) {
-    spdlog::info(w->info());
+    spdlog::warn(w->info(true));
   }
 
   std::vector<std::thread> pools;
@@ -125,10 +125,11 @@ void plotter::run_plotter() {
       page_block_allocator.retain(*report->block);
       finished_nonces += report->nonces;
       ++finished_count;
-      spdlog::warn("[{}%] PLOTTING at {}|{} nonces/min."
+      spdlog::warn("[{}%] PLOTTING at {}|{} nonces/min, time elapsed {} mins."
                 , uint64_t(finished_nonces * 100.) / total_nonces
                 , dispatched_nonces * 60ull * 1000 / plot_timer.elapsed()
-                , finished_nonces * 60ull * 1000 / plot_timer.elapsed());
+                , finished_nonces * 60ull * 1000 / plot_timer.elapsed()
+                , int(plot_timer.elapsed() / 60.) / 1000.);
     }
     if (workers_.size() == 0)
       continue;
@@ -177,7 +178,7 @@ void plotter::run_plotter() {
   for (auto& w : workers_)
     w->stop();
 
-  spdlog::warn("FINISHED PLOTTING at {} nonces/min.", dispatched_nonces * 60ull * 1000 / plot_timer.elapsed());
+  spdlog::warn("[{}%] FINISHED PLOTTING at {} nonces/min.", uint64_t(finished_nonces * 100.) / total_nonces, dispatched_nonces * 60ull * 1000 / plot_timer.elapsed());
   spdlog::warn("Total Nonces Generated: {}, time elapsed {} mins", finished_nonces, int(plot_timer.elapsed() / 60.) / 1000.);
   spdlog::info("allocated blocks: {}.", page_block_allocator.size());
   spdlog::info("dispatcher thread stopped!!!");

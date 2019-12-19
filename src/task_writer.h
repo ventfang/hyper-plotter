@@ -6,7 +6,11 @@
 
 struct writer_task {
   explicit writer_task(uint64_t _pid, uint64_t _sn, int32_t _nonces, std::string _driver)
-    : pid(_pid), sn(_sn), nonces(_nonces), driver(_driver), prev_(_sn) {}
+    : pid(_pid), sn(_sn), nonces(_nonces), driver(_driver), prev_(_sn) {
+      std::stringstream ss;
+      ss << pid << "_" << sn << "_" << nonces;
+      pf_ = ss.str();
+  }
 
   uint64_t pid;
   uint64_t sn;
@@ -24,14 +28,7 @@ struct writer_task {
     return n;
   }
 
-  std::string plot_file() {
-    if (pf_.size())
-      return pf_;
-    std::stringstream ss;
-    ss << pid << "_" << sn << "_" << nonces;
-    pf_ = ss.str();
-    return pf_;
-  }
+  std::string plot_file() { return pf_; }
 
 private:
   uint64_t prev_{0};

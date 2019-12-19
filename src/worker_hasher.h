@@ -25,7 +25,7 @@ public:
 
   void push_task(std::shared_ptr<hasher_task>&& task) { hasher_tasks_.push(std::move(task)); }
 
-  std::string info() override { return std::string("hasher ") + plotter_->info(); }
+  std::string info(bool detail = false) override { return std::string("hasher ") + plotter_->info(); }
 
   void stop() override {
     hasher_tasks_.stop();

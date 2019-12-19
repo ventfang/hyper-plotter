@@ -46,9 +46,20 @@ public:
     return {nullptr};
   }
 
-  std::string info() override {
+  std::string info(bool detail = false) override {
     std::stringstream ss;
-    ss << "writer [" << driver_ << "]";
+    ss << "writer [" << driver_ << "] (";
+    if (detail && writer_tasks_.size()) {
+      ss << std::accumulate(std::next(writer_tasks_.begin())
+                          , writer_tasks_.end()
+                          , writer_tasks_[0]->plot_file()
+                          , [](std::string &a, const std::shared_ptr<writer_task> &b) -> decltype(auto) {
+                              return  std::move(a) + ", " + b->plot_file();
+                            });
+    } else {
+      ss << writer_tasks_.size() << " files";
+    }
+    ss << ").";
     return ss.str();
   }
 
