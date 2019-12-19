@@ -20,7 +20,7 @@ void hasher_worker::run() {
       if (pending_hashings.size() > 0) {
         auto qi = pending_hashings.front();
         pending_hashings.pop_front();
-        plotter_->enqueue_wait_task(qi);
+        plotter_->enqueue_wait_task(qi, qi->htask->block->data());
         report(qi->htask);
       } else {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -33,7 +33,7 @@ void hasher_worker::run() {
       if (pending_hashings.size() > 0) {
         auto qi = pending_hashings.front();
         pending_hashings.pop_front();
-        plotter_->enqueue_wait_task(qi);
+        plotter_->enqueue_wait_task(qi, qi->htask->block->data());
         report(qi->htask);
       }
       continue;
@@ -45,7 +45,7 @@ void hasher_worker::run() {
 
     // calc plot
     if ((bench_mode & 0x02) == 0) {
-      auto qi = plotter_->enqueue_cl_task( task->pid, task->sn, task->nonces, task->block->data());
+      auto qi = plotter_->enqueue_cl_task(task->pid, task->sn, task->nonces);
       qi->htask.swap(task);
       pending_hashings.emplace_back(std::move(qi));
     } else {
@@ -56,7 +56,7 @@ void hasher_worker::run() {
   while (! signal::get().stopped() && pending_hashings.size() > 0) {
     auto qi = pending_hashings.front();
     pending_hashings.pop_front();
-    plotter_->enqueue_wait_task(qi);
+    plotter_->enqueue_wait_task(qi, qi->htask->block->data());
     report(qi->htask);
   }
 

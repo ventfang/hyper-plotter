@@ -21,7 +21,6 @@ struct gpu_plotter : public plotter_base {
   struct qitem_t {
     int mem_index;
     compute::wait_list wlist;
-    compute::event event;
     std::shared_ptr<hasher_task> htask;
     using ptr = std::shared_ptr<struct qitem_t>;
   };
@@ -63,13 +62,14 @@ struct gpu_plotter : public plotter_base {
     cqueue_ = compute::command_queue{context_, device_};
     dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
     dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
+    dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
     kernel_ = compute::kernel{program_, name};
     return true;
   }
 
   bool is_free() { return pending_dev_buff_sz_ < dev_buff_.size(); }
 
-  qitem_t::ptr enqueue_cl_task(uint64_t plot_id, uint64_t start_nonce, size_t nonces, uint8_t* host_buff) {
+  qitem_t::ptr enqueue_cl_task(uint64_t plot_id, uint64_t start_nonce, size_t nonces) {
     qitem_t::ptr item;
     if (pending_dev_buff_sz_ >= dev_buff_.size()) {
       return item;
@@ -93,8 +93,6 @@ struct gpu_plotter : public plotter_base {
         item->wlist.insert(cqueue_.enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_));
       }
 
-      item->event = std::move(cqueue_.enqueue_read_buffer(dev_buff_[item->mem_index], 0, global_work_size_*PLOT_SIZE, host_buff, item->wlist));
-      
       ++pending_dev_buff_sz_;
       if (++working_dev_buff_ == dev_buff_.size())
         working_dev_buff_ = 0;
@@ -105,11 +103,13 @@ struct gpu_plotter : public plotter_base {
     return item;
   }
 
-  void enqueue_wait_task(qitem_t::ptr& item) {
-    if (item->event == 0)
-      return;
+  void enqueue_wait_task(qitem_t::ptr& item, uint8_t* host_buff) {
     try {
-      item->event.wait();
+      auto event = cqueue_.enqueue_read_buffer(dev_buff_[item->mem_index], 0
+                                             , global_work_size_ * PLOT_SIZE
+                                             , host_buff
+                                             , item->wlist);
+      event.wait();
       --pending_dev_buff_sz_;
     } catch(compute::opencl_error& e) {
       spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
