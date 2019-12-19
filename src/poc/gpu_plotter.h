@@ -9,6 +9,7 @@
 
 namespace compute = boost::compute;
 
+struct hasher_task;
 struct gpu_plotter : public plotter_base {
   struct args_t {
     size_t lws;
@@ -16,6 +17,15 @@ struct gpu_plotter : public plotter_base {
     int step;
   };
   using args_t = struct args_t;
+
+  struct qitem_t {
+    int mem_index;
+    compute::wait_list wlist;
+    compute::event event;
+    std::shared_ptr<hasher_task> htask;
+    using ptr = std::shared_ptr<struct qitem_t>;
+  };
+  using qitem_t = struct qitem_t;
 
   gpu_plotter(gpu_plotter&) = delete;
   gpu_plotter(gpu_plotter&&) = delete;
@@ -57,6 +67,56 @@ struct gpu_plotter : public plotter_base {
     return true;
   }
 
+  bool is_free() { return pending_dev_buff_sz_ < dev_buff_.size(); }
+
+  qitem_t::ptr enqueue_cl_task(uint64_t plot_id, uint64_t start_nonce, size_t nonces, uint8_t* host_buff) {
+    qitem_t::ptr item;
+    if (pending_dev_buff_sz_ >= dev_buff_.size()) {
+      return item;
+    }
+
+    try {
+      item = std::make_shared<qitem_t>();
+      item->mem_index = working_dev_buff_;
+
+      kernel_.set_arg(0, dev_buff_[item->mem_index]);
+      kernel_.set_arg(1, start_nonce);
+      kernel_.set_arg(2, hton_ull(plot_id));
+      kernel_.set_arg(5, std::min(nonces, global_work_size_));
+
+      int start, end;
+      for (int i = 8192; i > 0; i -= step_) {
+        start = i;
+        end = i - step_ - !(i ^ step_);
+        kernel_.set_arg(3, start);
+        kernel_.set_arg(4, end);
+        item->wlist.insert(cqueue_.enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_));
+      }
+
+      item->event = std::move(cqueue_.enqueue_read_buffer(dev_buff_[item->mem_index], 0, global_work_size_*PLOT_SIZE, host_buff, item->wlist));
+      
+      ++pending_dev_buff_sz_;
+      if (++working_dev_buff_ == dev_buff_.size())
+        working_dev_buff_ = 0;
+    } catch(compute::opencl_error& e) {
+      spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
+      throw e;
+    }
+    return item;
+  }
+
+  void enqueue_wait_task(qitem_t::ptr& item) {
+    if (item->event == 0)
+      return;
+    try {
+      item->event.wait();
+      --pending_dev_buff_sz_;
+    } catch(compute::opencl_error& e) {
+      spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
+      throw e;
+    }
+  }
+
   void plot(uint64_t plot_id, uint64_t start_nonce, size_t nonces, uint8_t* host_buff) {
     nonces = std::min(nonces, global_work_size_);
     kernel_.set_arg(0, dev_buff_[0]);
@@ -74,7 +134,7 @@ struct gpu_plotter : public plotter_base {
         cqueue_.enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_);
       }
       cqueue_.finish();
-      cqueue_.enqueue_read_buffer(dev_buff_[0], 0, nonces*PLOT_SIZE, host_buff);
+      cqueue_.enqueue_read_buffer(dev_buff_[0], 0, global_work_size_*PLOT_SIZE, host_buff);
     } catch(compute::opencl_error& e) {
       spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
       throw e;
@@ -105,6 +165,7 @@ private:
   compute::command_queue cqueue_;
   std::vector<compute::buffer> dev_buff_;
   int working_dev_buff_{0};
+  int pending_dev_buff_sz_{0};
 
   int step_{ 32 };
   size_t global_work_size_{0};
