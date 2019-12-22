@@ -59,10 +59,11 @@ struct gpu_plotter : public plotter_base {
     } catch(...) {
       return false;
     }
-    cqueue_ = compute::command_queue{context_, device_};
-    dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
-    dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
-    dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
+    cqueue_.emplace_back(context_, device_);
+    cqueue_.emplace_back(context_, device_);
+    auto buf_count = device_.global_memory_size() / device_.max_memory_alloc_size();
+    for (; buf_count>0; --buf_count)
+      dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
     kernel_ = compute::kernel{program_, name};
     return true;
   }
@@ -90,7 +91,7 @@ struct gpu_plotter : public plotter_base {
         end = i - step_ - !(i ^ step_);
         kernel_.set_arg(3, start);
         kernel_.set_arg(4, end);
-        item->wlist.insert(cqueue_.enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_));
+        item->wlist.insert(cqueue_[0].enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_));
       }
 
       ++pending_dev_buff_sz_;
@@ -105,7 +106,7 @@ struct gpu_plotter : public plotter_base {
 
   void enqueue_wait_task(qitem_t::ptr& item, uint8_t* host_buff) {
     try {
-      auto event = cqueue_.enqueue_read_buffer(dev_buff_[item->mem_index], 0
+      auto event = cqueue_[1].enqueue_read_buffer(dev_buff_[item->mem_index], 0
                                              , global_work_size_ * PLOT_SIZE
                                              , host_buff
                                              , item->wlist);
@@ -131,10 +132,10 @@ struct gpu_plotter : public plotter_base {
         end = i - step_ - !(i ^ step_);
         kernel_.set_arg(3, start);
         kernel_.set_arg(4, end);
-        cqueue_.enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_);
+        cqueue_[0].enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_);
       }
-      cqueue_.finish();
-      cqueue_.enqueue_read_buffer(dev_buff_[0], 0, global_work_size_*PLOT_SIZE, host_buff);
+      cqueue_[0].finish();
+      cqueue_[0].enqueue_read_buffer(dev_buff_[0], 0, global_work_size_*PLOT_SIZE, host_buff);
     } catch(compute::opencl_error& e) {
       spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
       throw e;
@@ -162,7 +163,7 @@ private:
   compute::context context_;
   compute::program program_;
   compute::kernel kernel_;
-  compute::command_queue cqueue_;
+  std::vector<compute::command_queue> cqueue_;
   std::vector<compute::buffer> dev_buff_;
   int working_dev_buff_{0};
   int pending_dev_buff_sz_{0};

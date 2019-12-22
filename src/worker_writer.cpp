@@ -24,14 +24,14 @@ void writer_worker::run() {
 
     // write plot
     auto& wr_task = writer_tasks_[task->current_write_task];
-    spdlog::debug("write nonce [{}][{}, {}) ({}) to `{}`"
-                  , task->current_write_task
-                  , task->sn
-                  , task->sn+task->nonces
-                  , plotter_base::btoh(task->block->data(), 32)
-                  , wr_task->plot_file());
     if ((bench_mode & 0x01) == 0)
       std::this_thread::sleep_for(std::chrono::milliseconds(5120));
+    spdlog::debug("write nonce [{}][{}, {}) ({}) to `{}`"
+        , task->current_write_task
+        , task->sn
+        , task->sn + task->nonces
+        , plotter_base::btoh(task->block->data(), 32)
+        , wr_task->plot_file());
     ctx_.report(std::move(task));
   }
   spdlog::info("thread writer worker [{}] stopped.", driver_);
