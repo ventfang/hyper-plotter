@@ -6,6 +6,6 @@ set(EXEC_NAME "parallel-ploter")
 
 add_executable(${EXEC_NAME} ${PP_SOURCES} ${OP_SOURCES})
 
-target_link_libraries(${EXEC_NAME} shabal ${OpenCL_LIBRARY})
+target_link_libraries(${EXEC_NAME} shabal ${OpenCL_LIBRARY} ${Boost_FILESYSTEM_LIBRARY})
 
 install(TARGETS ${EXEC_NAME} DESTINATION bin)
