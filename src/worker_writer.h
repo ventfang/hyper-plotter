@@ -10,6 +10,7 @@
 #include "task_writer.h"
 #include "task_hasher.h"
 #include "common/signal.h"
+#include "common/file.h"
 
 class plotter;
 class writer_worker : public worker {
@@ -74,6 +75,7 @@ public:
 private:
   plotter& ctx_;
   std::string driver_;
+  util::file osfile_;
   
   std::mutex mux_;
   int cur_writer_task_index_{0};

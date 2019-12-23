@@ -6,7 +6,7 @@
 
 struct writer_task {
   explicit writer_task(uint64_t _pid, uint64_t _sn, int32_t _nonces, std::string _driver)
-    : pid(_pid), sn(_sn), nonces(_nonces), driver(_driver), prev_(_sn) {
+    : pid(_pid), sn(_sn), nonces(_nonces), init_nonces(_nonces), driver(_driver), prev_(_sn) {
       std::stringstream ss;
       ss << pid << "_" << sn << "_" << nonces;
       pf_ = ss.str();
@@ -15,6 +15,7 @@ struct writer_task {
   uint64_t pid;
   uint64_t sn;
   int32_t  nonces;
+  int32_t  init_nonces{0};
 
   std::string driver;
 

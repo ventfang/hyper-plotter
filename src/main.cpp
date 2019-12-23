@@ -139,8 +139,8 @@ int main(int argc, char* argv[]) {
 
     spdlog::set_level(spdlog::level::from_str((string)options.get("level")));
     spdlog::set_pattern("[%H:%M:%S.%f][%t] %^%v%$");
-	
-	  plotter(options).run();
+
+    plotter(options).run();
     spdlog::info("Done!!!");
   } catch(compute::opencl_error& e) {
       spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());

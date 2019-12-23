@@ -137,6 +137,10 @@ public:
     return (((size_t)hi) << 32) + lo;
   }
 
+  const std::string& filename() const {
+    return file_path_;
+  }
+  
   uint64_t last_error() const { return error_; }
 
 private:
