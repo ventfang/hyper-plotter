@@ -119,18 +119,23 @@ void plotter::run_plotter() {
   int dispatched_count{0};
   int finished_count{0};
   int total_count{(int)std::ceil(total_nonces * 1. / ploter->global_work_size())};
+  int on_going_task = 0;
+  int64_t vnpm{0}, vmbps{0};
   while (! signal::get().stopped()) {
     auto report = reporter_.pop_for(std::chrono::milliseconds(1000));
     if (report) {
       page_block_allocator.retain(*report->block);
       finished_nonces += report->nonces;
       ++finished_count;
-      spdlog::warn("[{}%] PLOTTING at {}|{}|{} nonces/min, {} MB/s, time elapsed {} mins."
+      --on_going_task;
+      vnpm = !!vnpm ? (vnpm * (workers_.size() - 1) + report->npm) / workers_.size() : report->npm;
+      vmbps = !!vmbps ? (vmbps * (workers_.size() - 1) + report->mbps) / workers_.size() : report->mbps;
+      spdlog::warn("[{}%] PLOTTING at {}|{}|{}|{} nonces/min, {}|{} MB/s, time elapsed {} mins."
                 , uint64_t(finished_nonces * 100.) / total_nonces
                 , dispatched_nonces * 60ull * 1000 / plot_timer.elapsed()
                 , finished_nonces * 60ull * 1000 / plot_timer.elapsed()
-                , report->npm
-                , report->mbps
+                , report->npm, vnpm
+                , report->mbps, vmbps
                 , int(plot_timer.elapsed() / 60.) / 1000.);
     }
     if (workers_.size() == 0)
@@ -144,6 +149,9 @@ void plotter::run_plotter() {
       continue;
     }
     
+    if (on_going_task > workers_.size())
+        continue;
+
     if (hashing->task_queue_size() > std::min(workers_.size(), 3llu))
       continue;
 
@@ -174,6 +182,7 @@ void plotter::run_plotter() {
                 , ht->sn + ht->nonces
                 , ht->writer->info());
     hashing->push_task(std::move(ht));
+    ++on_going_task;
   }
 
   signal::get().signal_stop();
