@@ -10,15 +10,54 @@
 #include "common/signal.h"
 #include "plotter.h"
 
-bool perform_write_plot(util::file& osfile, uint8_t* tmp_buf, std::shared_ptr<writer_task>& write_task, std::shared_ptr<hasher_task>& hash_task) {
+#define NONCES_VECTOR           16
+#define NONCES_VECTOR_LOG2      4
+#define MESSAGE_CAP             64
+#define NUM_HASHES   			      8192
+#define HASH_SIZE_WORDS         8
+#define NONCE_SIZE_WORDS        HASH_SIZE_WORDS * NUM_HASHES
+#define Address(nonce,hash,word) \
+              ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS \
+              + (hash) * NONCES_VECTOR * HASH_SIZE_WORDS \
+              + word * NONCES_VECTOR + \
+              (nonce & (NONCES_VECTOR-1)))
+
+static void transposition(util::paged_block& block, uint8_t* write_buff, int cur_scoop, int nstart, int nsize) {
+  uint32_t* src = (uint32_t*)block.data();
+  uint32_t* des = (uint32_t*)write_buff;
+  for (; nsize-->0; ++nstart) {
+    des[0x00] = src[Address(nstart, cur_scoop * 2, 0)];
+    des[0x01] = src[Address(nstart, cur_scoop * 2, 1)];
+    des[0x02] = src[Address(nstart, cur_scoop * 2, 2)];
+    des[0x03] = src[Address(nstart, cur_scoop * 2, 3)];
+    des[0x04] = src[Address(nstart, cur_scoop * 2, 4)];
+    des[0x05] = src[Address(nstart, cur_scoop * 2, 5)];
+    des[0x06] = src[Address(nstart, cur_scoop * 2, 6)];
+    des[0x07] = src[Address(nstart, cur_scoop * 2, 7)];
+    des[0x08] = src[Address(nstart, cur_scoop * 2 + 1, 0)];
+    des[0x09] = src[Address(nstart, cur_scoop * 2 + 1, 1)];
+    des[0x0A] = src[Address(nstart, cur_scoop * 2 + 1, 2)];
+    des[0x0B] = src[Address(nstart, cur_scoop * 2 + 1, 3)];
+    des[0x0C] = src[Address(nstart, cur_scoop * 2 + 1, 4)];
+    des[0x0D] = src[Address(nstart, cur_scoop * 2 + 1, 5)];
+    des[0x0E] = src[Address(nstart, cur_scoop * 2 + 1, 6)];
+    des[0x0F] = src[Address(nstart, cur_scoop * 2 + 1, 7)];
+  }
+}
+
+bool writer_worker::perform_write_plot(std::shared_ptr<writer_task>& write_task, std::shared_ptr<hasher_task>& hash_task) {
   size_t size = hash_task->nonces * plotter_base::PLOT_SIZE;
   uint8_t* buff = hash_task->block->data();
 
-  for (int i=0; i<4096; ++i) {
-    auto offset = ((hash_task->sn - write_task->sn) + i * write_task->nonces) * 64;
-    osfile.seek(offset);
-    for (int j=0; j<hash_task->nonces/256; ++j)
-      osfile.write(buff, 16*1024);
+  for (int cur_scoop=0; !signal::get().stopped() && cur_scoop<4096; ++cur_scoop) {
+    auto offset = ((hash_task->sn - write_task->sn) + cur_scoop * write_task->nonces) * 64;
+    osfile_.seek(offset);
+    int nonces = hash_task->nonces;
+    for (int nstart=0; !signal::get().stopped() && nonces>0; nstart+=SCOOPS_PER_WRITE) {
+      transposition(*hash_task->block, write_buffer_, cur_scoop, nstart, std::min(nonces, SCOOPS_PER_WRITE));
+      osfile_.write(write_buffer_, std::min(nonces, SCOOPS_PER_WRITE) * 64);
+    }
+    osfile_.flush();
   }
   return true;
 }
@@ -45,7 +84,9 @@ void writer_worker::run() {
                   , wr_task->plot_file());
     if ((bench_mode & 0x01) == 0) {
       util::timer timer;
-      auto file_path = wr_task->plot_file();
+      if (driver_[driver_.size() - 1] != '\\' || driver_[driver_.size() - 1] != '/')
+        driver_ += "\\";
+      auto file_path = driver_ + wr_task->plot_file();
       if (! util::file::exists(file_path)) {
         if (osfile_.is_open())
           osfile_.close();
@@ -62,7 +103,7 @@ void writer_worker::run() {
           osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
         }
       }
-      perform_write_plot(osfile_, nullptr, wr_task, task);
+      perform_write_plot(wr_task, task);
       task->mbps = task->nonces * 1000ull * plotter_base::PLOT_SIZE / 1024 / 1024 / timer.elapsed();
     }
     ctx_.report(std::move(task));

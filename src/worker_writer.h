@@ -14,11 +14,17 @@
 
 class plotter;
 class writer_worker : public worker {
+  static constexpr int SCOOPS_PER_WRITE = 256;
+  static constexpr int SCOOP_BYTES_PER_WRITE = SCOOPS_PER_WRITE * 64;
 public:
   writer_worker() = delete;
   explicit writer_worker(plotter& ctx, std::string& driver)
     : ctx_(ctx), driver_(driver) {
+    write_buffer_ =  (uint8_t*)(new uint8_t[SCOOP_BYTES_PER_WRITE]);
     spdlog::debug("init writer worker {}.", driver);
+  }
+  ~writer_worker() {
+    delete[] write_buffer_;
   }
 
   void task_do(std::shared_ptr<writer_task>& task) {}
@@ -28,6 +34,8 @@ public:
   void push_task(std::shared_ptr<writer_task>&& task) { writer_tasks_.emplace_back(std::move(task)); }
 
   void push_fin_hasher_task(std::shared_ptr<hasher_task>&& task) { fin_hasher_tasks_.push(std::move(task)); }
+
+  bool perform_write_plot(std::shared_ptr<writer_task>& write_task, std::shared_ptr<hasher_task>& hash_task);
 
   std::shared_ptr<hasher_task> next_hasher_task(int gws, util::paged_block& block) {
     //std::unique_lock<std::mutex> lock(mux_);
@@ -76,6 +84,7 @@ private:
   plotter& ctx_;
   std::string driver_;
   util::file osfile_;
+  uint8_t* write_buffer_;
   
   std::mutex mux_;
   int cur_writer_task_index_{0};
