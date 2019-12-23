@@ -24,4 +24,6 @@ struct hasher_task : public task {
   std::shared_ptr<worker> writer;
   int current_write_task{-1};
   util::paged_block* block;
+  int mbps{0};
+  int npm{0};
 };

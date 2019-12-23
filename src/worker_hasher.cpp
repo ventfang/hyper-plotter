@@ -24,12 +24,15 @@ void hasher_worker::run() {
       break;
 
     // calc plot
-    if ((bench_mode & 0x02) == 0)
+    if ((bench_mode & 0x02) == 0) {
+      util::timer timer;
       plotter_->plot( task->pid
                     , task->sn
                     , task->nonces
                     , task->block->data()
                     );
+      task->npm = task->nonces * 60ull * 1000 / timer.elapsed();
+    }
     report(task);
   }
 

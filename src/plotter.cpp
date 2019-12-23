@@ -125,10 +125,12 @@ void plotter::run_plotter() {
       page_block_allocator.retain(*report->block);
       finished_nonces += report->nonces;
       ++finished_count;
-      spdlog::warn("[{}%] PLOTTING at {}|{} nonces/min, time elapsed {} mins."
+      spdlog::warn("[{}%] PLOTTING at {}|{}|{} nonces/min, {} MB/s, time elapsed {} mins."
                 , uint64_t(finished_nonces * 100.) / total_nonces
                 , dispatched_nonces * 60ull * 1000 / plot_timer.elapsed()
                 , finished_nonces * 60ull * 1000 / plot_timer.elapsed()
+                , report->npm
+                , report->mbps
                 , int(plot_timer.elapsed() / 60.) / 1000.);
     }
     if (workers_.size() == 0)
@@ -149,7 +151,7 @@ void plotter::run_plotter() {
       cur_worker_pos = 0;
 
     auto wr_worker = std::dynamic_pointer_cast<writer_worker>(workers_[cur_worker_pos++]);
-    if (wr_worker->task_queue_size() > 1)
+    if (wr_worker->task_queue_size() > 0)
       continue;
     auto& nb = page_block_allocator.allocate(ploter->global_work_size() * plotter_base::PLOT_SIZE);
     if (! nb)

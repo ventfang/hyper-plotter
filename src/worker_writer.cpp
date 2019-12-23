@@ -30,8 +30,11 @@ void writer_worker::run() {
                   , task->sn+task->nonces
                   , plotter_base::btoh(task->block->data(), 32)
                   , wr_task->plot_file());
-    if ((bench_mode & 0x01) == 0)
+    if ((bench_mode & 0x01) == 0) {
+      util::timer timer;
       std::this_thread::sleep_for(std::chrono::milliseconds(5120));
+      task->mbps = task->nonces * 1000ull * plotter_base::PLOT_SIZE / 1024 / 1024 / timer.elapsed();
+    }
     ctx_.report(std::move(task));
   }
   spdlog::info("thread writer worker [{}] stopped.", driver_);
