@@ -54,13 +54,15 @@ public:
     if (handle_ == INVALID_HANDLE_VALUE)
       return false;
 
-    LONG hi = offset >> 32;
-    LONG lo = offset & 0xFFFFFFFF;
-    DWORD ret = ::SetFilePointer(handle_, lo, &hi, FILE_BEGIN);
-    if (ret == INVALID_SET_FILE_POINTER) {
-      error_ = ::GetLastError();
-      return false;
-    }
+    LARGE_INTEGER li;
+    li.QuadPart = offset;
+    li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, FILE_BEGIN);
+    error_ = ::GetLastError();
+    if (li.LowPart == INVALID_SET_FILE_POINTER && error_ != NO_ERROR)
+        return false;
+    if (li.QuadPart != offset)
+        return false;
+
     return true;
   }
 
@@ -90,7 +92,7 @@ public:
       ret = ::WriteFile(handle_, data, (DWORD)bytes_to_write, &wr_bytes, NULL);
       bytes_to_write -= wr_bytes;
       data += wr_bytes;
-    } while (ret && bytes_to_write > 0 && wr_bytes > 0);
+    } while (ret && bytes_to_write > 0);
 
     if (!ret || bytes_to_write > 0) {
       error_ = ::GetLastError();
@@ -105,16 +107,17 @@ public:
       return false;
 
     size_t file_size = size();
-    if (bytes < file_size)
+    if (bytes <= file_size)
       return true;
 
-    LONG hi = bytes >> 32;
-    LONG lo = bytes & 0xFFFFFFFF;
-    DWORD ret = ::SetFilePointer(handle_, lo, &hi, FILE_BEGIN);
-    if (ret == INVALID_SET_FILE_POINTER) {
-      error_ = ::GetLastError();
-      return false;
-    }
+    LARGE_INTEGER li;
+    li.QuadPart = bytes;
+    li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, FILE_BEGIN);
+    error_ = ::GetLastError();
+    if (li.LowPart == INVALID_SET_FILE_POINTER && error_ != NO_ERROR)
+        return false;
+    if (li.QuadPart != bytes)
+        return false;
     return TRUE == ::SetEndOfFile(handle_);
   }
 

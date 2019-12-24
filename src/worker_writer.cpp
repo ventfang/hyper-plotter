@@ -50,10 +50,10 @@ bool writer_worker::perform_write_plot(std::shared_ptr<writer_task>& write_task,
   uint8_t* buff = hash_task->block->data();
 
   for (int cur_scoop=0; !signal::get().stopped() && cur_scoop<4096; ++cur_scoop) {
-    auto offset = ((hash_task->sn - write_task->sn) + cur_scoop * write_task->nonces) * 64;
+    auto offset = ((hash_task->sn - write_task->init_sn) + cur_scoop * write_task->init_nonces) * 64;
     osfile_.seek(offset);
     int nonces = hash_task->nonces;
-    for (int nstart=0; !signal::get().stopped() && nonces>0; nstart+=SCOOPS_PER_WRITE) {
+    for (int nstart=0; !signal::get().stopped() && nonces>0; nonces-=SCOOPS_PER_WRITE, nstart+=SCOOPS_PER_WRITE) {
       transposition(*hash_task->block, write_buffer_, cur_scoop, nstart, std::min(nonces, SCOOPS_PER_WRITE));
       osfile_.write(write_buffer_, std::min(nonces, SCOOPS_PER_WRITE) * 64);
     }
@@ -76,15 +76,9 @@ void writer_worker::run() {
 
     // write plot
     auto& wr_task = writer_tasks_[task->current_write_task];
-    spdlog::debug("write nonce [{}][{}, {}) ({}) to `{}`"
-                  , task->current_write_task
-                  , task->sn
-                  , task->sn+task->nonces
-                  , plotter_base::btoh(task->block->data(), 32)
-                  , wr_task->plot_file());
     if ((bench_mode & 0x01) == 0) {
       util::timer timer;
-      if (driver_[driver_.size() - 1] != '\\' || driver_[driver_.size() - 1] != '/')
+      if (driver_[driver_.size() - 1] != '\\' && driver_[driver_.size() - 1] != '/')
         driver_ += "\\";
       auto file_path = driver_ + wr_task->plot_file();
       if (! util::file::exists(file_path)) {
@@ -106,6 +100,12 @@ void writer_worker::run() {
       perform_write_plot(wr_task, task);
       task->mbps = task->nonces * 1000ull * plotter_base::PLOT_SIZE / 1024 / 1024 / timer.elapsed();
     }
+    spdlog::debug("write nonce [{}][{}, {}) ({}) to `{}`"
+                  , task->current_write_task
+                  , task->sn
+                  , task->sn+task->nonces
+                  , plotter_base::btoh(task->block->data(), 32)
+                  , wr_task->plot_file());
     ctx_.report(std::move(task));
   }
   spdlog::info("thread writer worker [{}] stopped.", driver_);
