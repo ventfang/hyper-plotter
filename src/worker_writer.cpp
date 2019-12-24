@@ -25,7 +25,8 @@
 static void transposition(util::paged_block& block, uint8_t* write_buff, int cur_scoop, int nstart, int nsize) {
   uint32_t* src = (uint32_t*)block.data();
   uint32_t* des = (uint32_t*)write_buff;
-  for (; nsize-->0; ++nstart) {
+
+  for (; nsize-->0; ++nstart,des+=16) {
     des[0x00] = src[Address(nstart, cur_scoop * 2, 0)];
     des[0x01] = src[Address(nstart, cur_scoop * 2, 1)];
     des[0x02] = src[Address(nstart, cur_scoop * 2, 2)];
@@ -34,19 +35,19 @@ static void transposition(util::paged_block& block, uint8_t* write_buff, int cur
     des[0x05] = src[Address(nstart, cur_scoop * 2, 5)];
     des[0x06] = src[Address(nstart, cur_scoop * 2, 6)];
     des[0x07] = src[Address(nstart, cur_scoop * 2, 7)];
-    des[0x08] = src[Address(nstart, cur_scoop * 2 + 1, 0)];
-    des[0x09] = src[Address(nstart, cur_scoop * 2 + 1, 1)];
-    des[0x0A] = src[Address(nstart, cur_scoop * 2 + 1, 2)];
-    des[0x0B] = src[Address(nstart, cur_scoop * 2 + 1, 3)];
-    des[0x0C] = src[Address(nstart, cur_scoop * 2 + 1, 4)];
-    des[0x0D] = src[Address(nstart, cur_scoop * 2 + 1, 5)];
-    des[0x0E] = src[Address(nstart, cur_scoop * 2 + 1, 6)];
-    des[0x0F] = src[Address(nstart, cur_scoop * 2 + 1, 7)];
+    des[0x08] = src[Address(nstart, 8192 - (cur_scoop * 2 + 1), 0)];
+    des[0x09] = src[Address(nstart, 8192 - (cur_scoop * 2 + 1), 1)];
+    des[0x0A] = src[Address(nstart, 8192 - (cur_scoop * 2 + 1), 2)];
+    des[0x0B] = src[Address(nstart, 8192 - (cur_scoop * 2 + 1), 3)];
+    des[0x0C] = src[Address(nstart, 8192 - (cur_scoop * 2 + 1), 4)];
+    des[0x0D] = src[Address(nstart, 8192 - (cur_scoop * 2 + 1), 5)];
+    des[0x0E] = src[Address(nstart, 8192 - (cur_scoop * 2 + 1), 6)];
+    des[0x0F] = src[Address(nstart, 8192 - (cur_scoop * 2 + 1), 7)];
   }
 }
 
 bool writer_worker::perform_write_plot(std::shared_ptr<writer_task>& write_task, std::shared_ptr<hasher_task>& hash_task) {
-  size_t size = hash_task->nonces * plotter_base::PLOT_SIZE;
+  size_t size = (size_t)hash_task->nonces * plotter_base::PLOT_SIZE;
   uint8_t* buff = hash_task->block->data();
 
   for (int cur_scoop=0; !signal::get().stopped() && cur_scoop<4096; ++cur_scoop) {
@@ -57,7 +58,6 @@ bool writer_worker::perform_write_plot(std::shared_ptr<writer_task>& write_task,
       transposition(*hash_task->block, write_buffer_, cur_scoop, nstart, std::min(nonces, SCOOPS_PER_WRITE));
       osfile_.write(write_buffer_, std::min(nonces, SCOOPS_PER_WRITE) * 64);
     }
-    osfile_.flush();
   }
   return true;
 }
@@ -86,15 +86,16 @@ void writer_worker::run() {
           osfile_.close();
         osfile_.open(file_path, true);
         osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
-      }
-      if (! osfile_.is_open()) {
-        osfile_.open(file_path, false);
-        osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
       } else {
-        if (osfile_.filename() == file_path) {
-          osfile_.close();
+        if (! osfile_.is_open()) {
           osfile_.open(file_path, false);
           osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
+        } else {
+          if (osfile_.filename() != file_path) {
+            osfile_.close();
+            osfile_.open(file_path, false);
+            osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
+          }
         }
       }
       perform_write_plot(wr_task, task);

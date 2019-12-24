@@ -31,7 +31,7 @@ public:
 
     DWORD access_flag = GENERIC_READ | GENERIC_WRITE | FILE_ATTRIBUTE_NORMAL;
     DWORD create_flag = create ? CREATE_ALWAYS : OPEN_EXISTING;
-    DWORD attr_lag = nobuf ? (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH): FILE_ATTRIBUTE_NORMAL;
+    DWORD attr_lag = nobuf ? (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH): FILE_ATTRIBUTE_NORMAL|FILE_FLAG_RANDOM_ACCESS;
     handle_ = ::CreateFileA(filepath.c_str(), access_flag, 0, NULL, create_flag, attr_lag, NULL);
     if (INVALID_HANDLE_VALUE == handle_) {
       error_ = ::GetLastError();
@@ -50,13 +50,13 @@ public:
     }
   }
 
-  bool seek(size_t offset) {
+  bool seek(size_t offset, uint64_t mode = FILE_BEGIN) {
     if (handle_ == INVALID_HANDLE_VALUE)
       return false;
 
     LARGE_INTEGER li;
     li.QuadPart = offset;
-    li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, FILE_BEGIN);
+    li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, mode);
     error_ = ::GetLastError();
     if (li.LowPart == INVALID_SET_FILE_POINTER && error_ != NO_ERROR)
         return false;

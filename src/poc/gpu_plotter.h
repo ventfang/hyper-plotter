@@ -74,7 +74,7 @@ struct gpu_plotter : public plotter_base {
         cqueue_.enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_);
       }
       cqueue_.finish();
-      cqueue_.enqueue_read_buffer(dev_buff_[0], 0, nonces*PLOT_SIZE, host_buff);
+      cqueue_.enqueue_read_buffer(dev_buff_[0], 0, global_work_size_*PLOT_SIZE, host_buff);
     } catch(compute::opencl_error& e) {
       spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
       throw e;

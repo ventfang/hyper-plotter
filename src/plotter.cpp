@@ -145,7 +145,6 @@ void plotter::run_plotter() {
       break;
     }
     if (dispatched_nonces == total_nonces) {
-      spdlog::info("Ploting dispatched!!!");
       continue;
     }
     
