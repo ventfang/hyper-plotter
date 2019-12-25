@@ -45,6 +45,8 @@ private:
 
   void run_plotter();
 
+  void run_disk_bench();
+
 private:
   optparse::Values& args_;
   std::vector<std::shared_ptr<worker>> workers_;

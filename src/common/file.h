@@ -102,7 +102,7 @@ public:
     return true;
   }
 
-  bool allocate(size_t bytes) {
+  bool allocate(size_t bytes, bool sparse=true) {
     if (handle_ == INVALID_HANDLE_VALUE)
       return false;
 
@@ -115,10 +115,20 @@ public:
     li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, FILE_BEGIN);
     error_ = ::GetLastError();
     if (li.LowPart == INVALID_SET_FILE_POINTER && error_ != NO_ERROR)
-        return false;
+      return false;
     if (li.QuadPart != bytes)
-        return false;
-    return TRUE == ::SetEndOfFile(handle_);
+      return false;
+    if (!::SetEndOfFile(handle_)) {
+      error_ = ::GetLastError();
+      return false;
+    }
+    
+    // TODO: check success
+    if (sparse && !::SetFileValidData(handle_, bytes)) {
+      error_ = ::GetLastError();
+      return false;
+    }
+    return true;
   }
 
   bool flush() {

@@ -7,6 +7,8 @@ void plotter::run() {
     run_plotter();
   } else if ((int)args_.get("test")) {
     run_test();
+  } else if ((int)args_.get("diskbench")) {
+    run_disk_bench();
   }
 }
 
@@ -195,6 +197,67 @@ void plotter::run_plotter() {
   for (auto& t : pools)
     t.join();
   spdlog::info("all worker thread stopped!!!");
+}
+
+void plotter::run_disk_bench() {
+  auto args = args_["drivers"];
+  std::regex re{", "};
+  auto argvs = std::vector<std::string> {
+    std::sregex_token_iterator(args.begin(), args.end(), re, -1),
+    std::sregex_token_iterator()
+  };
+  if (args.empty() || argvs.size() < 2) {
+    spdlog::error("error args: prog.exe filename 0|1|2 [0|1 [0|1]] (file preallocate seek flush)");
+    return;
+  }
+
+  constexpr auto bytes = 20ull*1024*1024*1024;
+  constexpr auto bytes_per_write = 16 * 1024;
+  spdlog::info("start disk bench mode");
+  auto total_bytes = bytes;
+  
+  util::file osfile;
+  auto create = true;
+  if (util::file::exists(argvs[0])) {
+    create = false;
+  }
+  if (!osfile.open(argvs[0], create)) {
+    spdlog::error("open {} failed {}", argvs[0], osfile.last_error());
+    return;
+  }
+  if (argvs[1] != "0") {
+    auto sparse = argvs[1] == "2";
+    if (!osfile.allocate(total_bytes, sparse)) {
+      spdlog::error("allocate {} failed {}", argvs[0], osfile.last_error());
+      return;
+    }
+  }
+  uint8_t data[bytes_per_write];
+  for (auto i=0; i<bytes_per_write; ++i)
+    data[i] = 'a';
+  util::timer timer;
+  osfile.seek(0);
+  auto doseek = argvs.size() > 2 && argvs[2] == "1";
+  auto doflush = argvs.size() > 3 ? std::stoll(argvs[3]) : 0ull;
+  size_t bytes_written = 0;
+  for (; total_bytes > 0; total_bytes-=bytes_per_write) {
+    if (doseek && !osfile.seek(total_bytes - bytes_per_write)) {
+      spdlog::error("seek failed.");
+      break;
+    }
+    if (!osfile.write(data, bytes_per_write)) {
+      spdlog::error("write {} failed {}", argvs[0], osfile.last_error());
+      spdlog::warn("total_bytes: {}, written: {}", bytes, bytes - total_bytes);
+      break;
+    }
+    bytes_written += bytes_per_write;
+    if (doflush && bytes_written > doflush * 1024 * 1024) {
+      bytes_written = 0;
+      osfile.flush();
+    }
+  }
+  spdlog::warn("total_bytes: {}, written: {}, time elapsed: {} secs, speed: {} MB/s."
+    , bytes, bytes - total_bytes, timer.elapsed() / 1000, bytes * 1000 / 1024 / 1024 / timer.elapsed());
 }
 
 void plotter::report(std::shared_ptr<hasher_task>&& task) { reporter_.push(std::move(task)); }

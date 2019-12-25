@@ -13,6 +13,7 @@ namespace compute = boost::compute;
 
 #include "config.h"
 #include "plotter.h"
+#include "common/utils.h"
 
 namespace opt = optparse;
 using namespace std;
@@ -46,6 +47,7 @@ int main(int argc, char* argv[]) {
   parser.add_option("-w", "--weight").action("store").type("double").set_default(1).help("plot file weight, default: %default (GB)");
   parser.add_option("-m", "--mem").action("store").type("double").set_default(65535).help("memory to use, default: %default (GB)");
   parser.add_option("-p", "--plot").action("count").help("run plots generation, default: %default");
+  parser.add_option("-d", "--diskbench").action("count").help("run disk bench, default: %default");
 
   parser.add_option("--step").action("store").type("uint32_t").set_default(8192).help("hash calc batch, default: %default");
   parser.add_option("--gws").action("store").type("uint32_t").set_default(0).help("global work size, default: %default");
@@ -139,6 +141,15 @@ int main(int argc, char* argv[]) {
 
     spdlog::set_level(spdlog::level::from_str((string)options.get("level")));
     spdlog::set_pattern("[%H:%M:%S.%f][%t] %^%v%$");
+
+    #ifdef WIN32
+    auto privs = util::acquire_manage_volume_privs();
+    if (!privs) {
+      spdlog::warn("***RUN WITHOUT PRIVILEGES will be very slow***\n"
+                   "***********************************"
+                   "restart with administrative rights.");
+    }
+    #endif
 
     plotter(options).run();
     spdlog::info("Done!!!");
