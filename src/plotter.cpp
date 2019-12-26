@@ -78,12 +78,13 @@ void plotter::run_plotter() {
   spdlog::warn("plot id:              {}", plot_id);
   spdlog::warn("start nonce:          {}", start_nonce);
   auto total_size_gb = total_nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
-  spdlog::warn("total nonces:         {} ({} GB)", total_nonces, int(total_size_gb*100)/100.);
+  spdlog::warn("total nonces:         {} ({} GB)", total_nonces, size_t(total_size_gb*100)/100.);
   spdlog::warn("total plot files:     {} in {}", total_files, patharg);
   spdlog::warn("plot file nonces:     {} ({} GB)", max_nonces_per_file, max_weight_per_file / 1024 / 1024 / 1024);
 
   // init writer worker and task
   std::unordered_map<std::string, std::shared_ptr<writer_worker>> writers;
+  std::unordered_map<std::string, int64_t> free_spaces;
   auto sn_to_gen = start_nonce;
   auto nonces_to_gen = total_nonces;
   auto task_allocated = true;
@@ -94,20 +95,23 @@ void plotter::run_plotter() {
         auto canonical = driver;
         if (canonical[canonical.size() - 1] != '\\' && canonical[canonical.size() - 1] != '/')
           canonical += "\\";
+        // TODO: check disk root
+        free_spaces[driver] = util::sys_free_disk_bytes(driver);
         auto worker = std::make_shared<writer_worker>(*this, canonical);
         writers[driver] = worker;
         workers_.push_back(std::move(worker));
       }
-      const auto driver_max_nonces = util::sys_free_disk_bytes(driver) / plotter_base::PLOT_SIZE;
-      auto plot_nonces = std::max(0ull, std::min(max_nonces_per_file, driver_max_nonces));
-      auto nonces = (uint32_t)std::min(nonces_to_gen, plot_nonces);
-      if (nonces < 16)
+      const auto driver_max_nonces = (free_spaces[driver] - 16 * 1024) / plotter_base::PLOT_SIZE;
+      auto plot_nonces = (size_t)std::max(0ll, std::min((int64_t)max_nonces_per_file, driver_max_nonces));
+      auto nonces = std::min(nonces_to_gen, plot_nonces);
+      if (nonces < 16 || nonces >= INT32_MAX) // max 511T
         continue;
       if (nonces_to_gen < 16)
         break;
-      auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, nonces, writers[driver]->canonical_driver());
+      auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, (uint32_t)nonces, writers[driver]->canonical_driver());
       sn_to_gen += nonces;
       nonces_to_gen -= nonces;
+      free_spaces[driver] = free_spaces[driver] - (int64_t)nonces * plotter_base::PLOT_SIZE - 16 * 1024;
       writers[driver]->push_task(std::move(task));
       task_allocated = true;
     }
