@@ -11,16 +11,17 @@
 #include "plotter.h"
 
 #define NONCES_VECTOR           16
-#define NONCES_VECTOR_LOG2      4
+#define NONCES_VECTOR_MASK      15
+#define NONCES_VECTOR_ALIGN     (~15)
 #define MESSAGE_CAP             64
-#define NUM_HASHES   			      8192
+#define NUM_HASHES              8192
 #define HASH_SIZE_WORDS         8
 #define NONCE_SIZE_WORDS        HASH_SIZE_WORDS * NUM_HASHES
 #define Address(nonce,hash,word) \
-              ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS \
-              + (hash) * NONCES_VECTOR * HASH_SIZE_WORDS \
-              + word * NONCES_VECTOR + \
-              (nonce & (NONCES_VECTOR-1)))
+              ((nonce) & NONCES_VECTOR_ALIGN) * NONCE_SIZE_WORDS \
+            + (hash) * NONCES_VECTOR * HASH_SIZE_WORDS \
+            + (word) * NONCES_VECTOR \
+            + ((nonce) & NONCES_VECTOR_MASK)
 
 static void transposition(util::paged_block& block, uint8_t* write_buff, int cur_scoop, int nstart, int nsize) {
   uint32_t* src = (uint32_t*)block.data();

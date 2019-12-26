@@ -387,9 +387,10 @@ __constant static const sph_u32 C_init_512[] = {
 /* END -- automatically generated code. */
 
 #define NONCES_VECTOR           16
-#define NONCES_VECTOR_LOG2      4
+#define NONCES_VECTOR_MASK      15
+#define NONCES_VECTOR_ALIGN     (~15)
 #define MESSAGE_CAP             64
-#define NUM_HASHES   			8192
+#define NUM_HASHES              8192
 #define HASH_SIZE_WORDS         8
 #define NONCE_SIZE_WORDS        HASH_SIZE_WORDS * NUM_HASHES
 
@@ -402,8 +403,11 @@ __constant static const sph_u32 C_init_512[] = {
 		          rotate(n, 40UL), 0x00FF000000FF0000UL), \
 		0xFFFF0000FFFF0000UL)
 
-#define Address(nonce,hash,word) ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS + (hash) * NONCES_VECTOR * HASH_SIZE_WORDS + word * NONCES_VECTOR + (nonce & (NONCES_VECTOR-1)))
-//#define Address(nonce,hash,word) (nonce * NONCE_SIZE_WORDS + (hash) * HASH_SIZE_WORDS + word)
+#define Address(nonce,hash,word) \
+              ((nonce) & NONCES_VECTOR_ALIGN) * NONCE_SIZE_WORDS \
+            + (hash) * NONCES_VECTOR * HASH_SIZE_WORDS \
+            + (word) * NONCES_VECTOR \
+            + ((nonce) & NONCES_VECTOR_MASK)
 
 /* Johnny's optimised nonce calculation kernel 
  * based on the implementation found in BRS
