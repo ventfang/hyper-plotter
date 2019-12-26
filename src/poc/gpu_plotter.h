@@ -42,10 +42,10 @@ struct gpu_plotter : public plotter_base {
   }
 
   bool init(const std::string& kernel, const std::string& name) {
-    spdlog::info("loading openc kernel...");
+    spdlog::debug("loading opencl kernel...");
     program_ = compute::program::create_with_source_file(kernel, context_);
     try {
-      spdlog::info("compiling openc kernel...");
+      spdlog::debug("compiling openc kernel...");
       program_.build();
     } catch(...) {
       return false;

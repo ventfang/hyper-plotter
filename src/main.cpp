@@ -18,6 +18,12 @@ namespace compute = boost::compute;
 namespace opt = optparse;
 using namespace std;
 
+#ifdef WIN32
+#define PAUSE() system("pause")
+#else
+#define std::getc()
+#endif
+
 #define COLOR_PRINT_R SPDLOG_ERROR
 #define COLOR_PRINT_G SPDLOG_INFO
 #define COLOR_PRINT_Y SPDLOG_WARN
@@ -45,7 +51,7 @@ int main(int argc, char* argv[]) {
   parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(0).help("start nonce, default: %default");
   parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(10000).help("number of nonces, default: %default");
   parser.add_option("-w", "--weight").action("store").type("double").set_default(1).help("plot file weight, default: %default (GB)");
-  parser.add_option("-m", "--mem").action("store").type("double").set_default(65535).help("memory to use, default: %default (GB)");
+  parser.add_option("-m", "--mem").action("store").type("double").set_default(0).help("memory to use, default: %default (GB)");
   parser.add_option("-p", "--plot").action("count").help("run plots generation, default: %default");
   parser.add_option("-d", "--diskbench").action("count").help("run disk bench, default: %default");
 
@@ -64,28 +70,29 @@ int main(int argc, char* argv[]) {
 
     spdlog::set_pattern("%^%v%$");
     spdlog::info(parser.get_version());
-    spdlog::set_level(spdlog::level::trace);
 
-    std::vector<compute::platform> platforms = compute::system::platforms();
-    spdlog::debug("Listing platforms/devices...");
-    std::vector<compute::device> cpu_devices;
-    std::vector<compute::device> gpu_devices;
-    for(auto& platform : platforms) {
-      COLOR_PRINT_Y("Platform {}", platform.name());
-      std::vector<compute::device> devices = platform.devices();
-      for(auto& device : devices) {
-        std::string type;
-        if(device.type() & compute::device::gpu)
-          gpu_devices.push_back(device), (type = "GPU");
-        else if(device.type() & compute::device::cpu)
-          cpu_devices.push_back(device), (type = "CPU");
-        else if(device.type() & compute::device::accelerator)
-          type = "Accelerator";
-        else
-          type = "Unknown";
+    if ((int)options.get("verbose") > 0) {
+      spdlog::set_level(spdlog::level::trace);
 
-        COLOR_PRINT_Y("    {}: {}", type, device.name());
-        if ((int)options.get("verbose") > 0) {
+      std::vector<compute::platform> platforms = compute::system::platforms();
+      spdlog::debug("Listing platforms/devices...");
+      std::vector<compute::device> cpu_devices;
+      std::vector<compute::device> gpu_devices;
+      for(auto& platform : platforms) {
+        COLOR_PRINT_Y("Platform {}", platform.name());
+        std::vector<compute::device> devices = platform.devices();
+        for(auto& device : devices) {
+          std::string type;
+          if(device.type() & compute::device::gpu)
+            gpu_devices.push_back(device), (type = "GPU");
+          else if(device.type() & compute::device::cpu)
+            cpu_devices.push_back(device), (type = "CPU");
+          else if(device.type() & compute::device::accelerator)
+            type = "Accelerator";
+          else
+            type = "Unknown";
+
+          COLOR_PRINT_Y("    {}: {}", type, device.name());
           COLOR_PRINT_Y("        clock_frequency: {}", device.clock_frequency());
           COLOR_PRINT_Y("        compute_units: {}", device.compute_units());
           COLOR_PRINT_Y("        driver_version: {}", device.driver_version());
@@ -108,48 +115,26 @@ int main(int argc, char* argv[]) {
         }
       }
     }
-    
-    COLOR_PRINT_R("");
-    if (cpu_devices.size() > 0) {
-      COLOR_PRINT_R("CPU device:           {}", cpu_devices[0].name());
-    }
-    if (gpu_devices.size() > 0) {
-      COLOR_PRINT_R("GPU device:           {}", gpu_devices[0].name());
-    } else {
-      COLOR_PRINT_R("GPU device:           not setup");
-    }
 
-    if (dirs.empty()) {
-      COLOR_PRINT_R("directories:          not set (dry run).");
-    }
-    else {
+    if (!dirs.empty()){
       auto&& directories = accumulate(std::next(dirs.begin()), dirs.end(), *dirs.begin(),
                                       [](string &a, const string &b) -> decltype(auto) {
                                         return  std::move(a) + ", " + b;
                                       });
-      COLOR_PRINT_R("directories:          [{}] ({})", dirs.size(), directories);
       options["drivers"] = directories;
     }
 
-    COLOR_PRINT_R("plot id:              {}", std::stoull(options["id"]));
-    COLOR_PRINT_R("start nonce:          {}", std::stoull(options["sn"]));
-    auto nonces = (uint32_t)std::stoull(options["num"]);
-    auto total_size_gb = nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
-    COLOR_PRINT_R("number of nonces:     {} ({} GB)", nonces, int(total_size_gb*100)/100.);
-    COLOR_PRINT_R("plot weight:          {} GB", (double)options.get("weight"));
-    COLOR_PRINT_R("number of plot files: {}", std::ceil(total_size_gb / (double)options.get("weight")));
+    #ifdef WIN32
+    if ((int)options.get("plot") && !util::acquire_manage_volume_privs()) {
+      spdlog::error("\n\t\t\t************************************************"
+                    "\n\t\t\t*** RUN WITHOUT PRIVILEGES will be very slow ***"
+                    "\n\t\t\t***    restart with administrative rights.   ***"
+                    "\n\t\t\t************************************************\n");
+    }
+    #endif
 
     spdlog::set_level(spdlog::level::from_str((string)options.get("level")));
     spdlog::set_pattern("[%H:%M:%S.%f][%t] %^%v%$");
-
-    #ifdef WIN32
-    auto privs = util::acquire_manage_volume_privs();
-    if (!privs) {
-      spdlog::warn("***RUN WITHOUT PRIVILEGES will be very slow***\n"
-                   "***********************************"
-                   "restart with administrative rights.");
-    }
-    #endif
 
     plotter(options).run();
     spdlog::info("Done!!!");
@@ -160,5 +145,6 @@ int main(int argc, char* argv[]) {
   } catch (...) {
     return -1;
   }
+  PAUSE();
   return 0;
 }

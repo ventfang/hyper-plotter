@@ -20,11 +20,11 @@ public:
   writer_worker() = delete;
   explicit writer_worker(plotter& ctx, std::string& driver)
     : ctx_(ctx), driver_(driver) {
-    write_buffer_ =  (uint8_t*)(new uint8_t[SCOOP_BYTES_PER_WRITE]);
+    write_buffer_ = (uint8_t*) operator new[](SCOOP_BYTES_PER_WRITE, std::align_val_t(64));
     spdlog::debug("init writer worker {}.", driver);
   }
   ~writer_worker() {
-    delete[] write_buffer_;
+    operator delete[](write_buffer_, std::align_val_t(64));
   }
 
   void task_do(std::shared_ptr<writer_task>& task) {}
@@ -80,6 +80,10 @@ public:
 
   size_t task_queue_size() override { return fin_hasher_tasks_.size(); }
   
+  const std::string canonical_driver() const {
+    return driver_;
+  }
+
 private:
   plotter& ctx_;
   std::string driver_;

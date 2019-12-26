@@ -1,3 +1,4 @@
+#include <unordered_map>
 #include "plotter.h"
 
 plotter::plotter(optparse::Values& args) : args_{args} {}
@@ -51,11 +52,13 @@ void plotter::run_test() {
 
 void plotter::run_plotter() {
   signal::get().install_signal();
-  auto plot_id = std::stoull(args_["id"]);
-  auto start_nonce = std::stoull(args_["sn"]);
+  const auto plot_id = std::stoull(args_["id"]);
+  const auto start_nonce = std::stoull(args_["sn"]);
   auto total_nonces = std::stoull(args_["num"]);
-  auto max_mem_to_use = uint64_t((double)std::stod(args_["mem"]) * 1024) * 1024 * 1024;
-  auto max_weight_per_file = uint64_t((double)std::stod(args_["weight"]) * 1024) * 1024 * 1024;
+  const auto max_mem_to_use = (args_["mem"] == "0")
+                            ? uint64_t(util::sys_free_mem_bytes() * 0.8)
+                            : uint64_t((double)std::stod(args_["mem"]) * 1024) * 1024 * 1024;
+  const auto max_weight_per_file = uint64_t((double)std::stod(args_["weight"]) * 1024) * 1024 * 1024;
   util::block_allocator page_block_allocator{max_mem_to_use};
   
   auto patharg = args_["drivers"];
@@ -69,26 +72,50 @@ void plotter::run_plotter() {
     return;
   }
 
-  // TODO: calc by free space
-  // TODO: padding
-  auto max_nonces_per_file = max_weight_per_file / plotter_base::PLOT_SIZE;
-  auto total_files = std::ceil(total_nonces * 1. / max_nonces_per_file);
-  auto max_files_per_driver = std::ceil(total_files * 1. / drivers.size());
+  const auto max_nonces_per_file = max_weight_per_file / plotter_base::PLOT_SIZE;
+  const auto total_files = std::ceil(total_nonces * 1. / max_nonces_per_file);
+
+  spdlog::warn("plot id:              {}", plot_id);
+  spdlog::warn("start nonce:          {}", start_nonce);
+  auto total_size_gb = total_nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
+  spdlog::warn("total nonces:         {} ({} GB)", total_nonces, int(total_size_gb*100)/100.);
+  spdlog::warn("total plot files:     {} in {}", total_files, patharg);
+  spdlog::warn("plot file nonces:     {} ({} GB)", max_nonces_per_file, max_weight_per_file / 1024 / 1024 / 1024);
 
   // init writer worker and task
+  std::unordered_map<std::string, std::shared_ptr<writer_worker>> writers;
   auto sn_to_gen = start_nonce;
   auto nonces_to_gen = total_nonces;
-  for (auto& driver : drivers) {
-    auto worker = std::make_shared<writer_worker>(*this, driver);
-    workers_.push_back(worker);
-    for (int i=0; i<max_files_per_driver && nonces_to_gen>0; ++i) {
-      int32_t nonces = (int32_t)std::min(nonces_to_gen, max_nonces_per_file);
-      auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, nonces, driver);
+  auto task_allocated = true;
+  for (; nonces_to_gen > 0 && task_allocated;) {
+    task_allocated = false;
+    for (auto& driver : drivers) {
+      if (! writers[driver]) {
+        auto canonical = driver;
+        if (canonical[canonical.size() - 1] != '\\' && canonical[canonical.size() - 1] != '/')
+          canonical += "\\";
+        auto worker = std::make_shared<writer_worker>(*this, canonical);
+        writers[driver] = worker;
+        workers_.push_back(std::move(worker));
+      }
+      const auto driver_max_nonces = util::sys_free_disk_bytes(driver) / plotter_base::PLOT_SIZE;
+      auto plot_nonces = std::max(0ull, std::min(max_nonces_per_file, driver_max_nonces));
+      auto nonces = (uint32_t)std::min(nonces_to_gen, plot_nonces);
+      if (nonces < 16)
+        continue;
+      if (nonces_to_gen < 16)
+        break;
+      auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, nonces, writers[driver]->canonical_driver());
       sn_to_gen += nonces;
       nonces_to_gen -= nonces;
-      worker->push_task(std::move(task));
+      writers[driver]->push_task(std::move(task));
+      task_allocated = true;
     }
   }
+  if (nonces_to_gen > 0 && total_nonces >= 16) {
+    spdlog::error("DISK SPACE NOT ENOUGH!!! nonces to generate: [{} / {}]", total_nonces - nonces_to_gen, total_nonces);
+  }
+  total_nonces -= nonces_to_gen;
 
   // init hasher worker
   auto plot_args = gpu_plotter::args_t{std::stoull(args_["lws"])
@@ -103,10 +130,15 @@ void plotter::run_plotter() {
   auto hashing = std::make_shared<hasher_worker>(*this, ploter);
   workers_.push_back(hashing);
 
-  spdlog::warn("Plotting {} - [{} {}) ...", plot_id, start_nonce, start_nonce+total_nonces);
   for (auto& w : workers_) {
-    spdlog::warn(w->info(true));
+    spdlog::warn("* {}", w->info(true));
   }
+  spdlog::error("* Plotting {} - [{}, {}) ...", plot_id, start_nonce, start_nonce+total_nonces);
+
+  std::cout << "Confirm and Continue [y/N]: ";
+  auto yn = std::getc(stdin);
+  if (yn != 'Y' && yn != 'y')
+    return;
 
   std::vector<std::thread> pools;
   for (auto& worker : workers_) {
@@ -124,7 +156,7 @@ void plotter::run_plotter() {
   int on_going_task = 0;
   int64_t vnpm{0}, vmbps{0};
   while (! signal::get().stopped()) {
-    auto report = reporter_.pop_for(std::chrono::milliseconds(1000));
+    auto report = reporter_.pop_for(std::chrono::milliseconds(200));
     if (report) {
       page_block_allocator.retain(*report->block);
       finished_nonces += report->nonces;
@@ -150,10 +182,11 @@ void plotter::run_plotter() {
       continue;
     }
     
+    // max worker = write worker size + 2
     if (on_going_task > workers_.size())
         continue;
 
-    if (hashing->task_queue_size() > std::min(workers_.size(), 3llu))
+    if (hashing->task_queue_size() > 0llu)
       continue;
 
     if (cur_worker_pos >= max_worker_pos)
@@ -174,7 +207,7 @@ void plotter::run_plotter() {
     dispatched_nonces += ht->nonces;
     ++dispatched_count;
     spdlog::debug("[{}] submit task ({}/{}/{}) [{}][{} {}) {}"
-                , hashing->task_queue_size()
+                , on_going_task
                 , dispatched_count
                 , finished_count
                 , total_count

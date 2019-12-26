@@ -79,9 +79,7 @@ void writer_worker::run() {
     auto& wr_task = writer_tasks_[task->current_write_task];
     if ((bench_mode & 0x01) == 0) {
       util::timer timer;
-      if (driver_[driver_.size() - 1] != '\\' && driver_[driver_.size() - 1] != '/')
-        driver_ += "\\";
-      auto file_path = driver_ + wr_task->plot_file();
+      auto& file_path = wr_task->plot_file();
       if (! util::file::exists(file_path)) {
         if (osfile_.is_open())
           osfile_.close();
@@ -110,5 +108,5 @@ void writer_worker::run() {
                   , wr_task->plot_file());
     ctx_.report(std::move(task));
   }
-  spdlog::info("thread writer worker [{}] stopped.", driver_);
+  spdlog::error("thread writer worker [{}] stopped.", driver_);
 }
