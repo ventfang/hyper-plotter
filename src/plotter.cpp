@@ -130,6 +130,10 @@ void plotter::run_plotter() {
   auto hashing = std::make_shared<hasher_worker>(*this, ploter);
   workers_.push_back(hashing);
 
+  auto max_flying_tasks = max_mem_to_use / ploter->global_work_size() / plotter_base::PLOT_SIZE;
+  max_flying_tasks = std::min(max_flying_tasks, workers_.size() * 2);
+  spdlog::warn("max mem to use:       {} GB", max_mem_to_use / 1024 / 1024 / 1024);
+  spdlog::warn("max flying tasks:     {} tasks", max_flying_tasks);
   for (auto& w : workers_) {
     spdlog::warn("* {}", w->info(true));
   }
@@ -182,8 +186,7 @@ void plotter::run_plotter() {
       continue;
     }
     
-    // max worker = write worker size + 2
-    if (on_going_task > workers_.size())
+    if (on_going_task >= max_flying_tasks)
         continue;
 
     if (hashing->task_queue_size() > 0llu)
@@ -192,12 +195,16 @@ void plotter::run_plotter() {
     if (cur_worker_pos >= max_worker_pos)
       cur_worker_pos = 0;
 
-    auto wr_worker = std::dynamic_pointer_cast<writer_worker>(workers_[cur_worker_pos++]);
-    if (wr_worker->task_queue_size() > 0)
+    auto wr_worker = std::dynamic_pointer_cast<writer_worker>(workers_[cur_worker_pos]);
+    if (wr_worker->task_queue_size() > 0) {
+      cur_worker_pos++;
       continue;
+    }
     auto& nb = page_block_allocator.allocate(ploter->global_work_size() * plotter_base::PLOT_SIZE);
     if (! nb)
       continue;
+
+    cur_worker_pos++;
 
     auto ht = wr_worker->next_hasher_task((int)(ploter->global_work_size()), nb);
     if (! ht) {
@@ -206,17 +213,18 @@ void plotter::run_plotter() {
     }
     dispatched_nonces += ht->nonces;
     ++dispatched_count;
-    spdlog::debug("[{}] submit task ({}/{}/{}) [{}][{} {}) {}"
+    ++on_going_task;
+    spdlog::debug("[{}] submit task ({}/{}/{}) [{}.{}][{} {}) {}"
                 , on_going_task
                 , dispatched_count
                 , finished_count
                 , total_count
+                , cur_worker_pos
                 , ht->current_write_task
                 , ht->sn
                 , ht->sn + ht->nonces
                 , ht->writer->info());
     hashing->push_task(std::move(ht));
-    ++on_going_task;
   }
 
   signal::get().signal_stop();

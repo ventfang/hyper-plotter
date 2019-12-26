@@ -56,7 +56,7 @@ public:
 
     LARGE_INTEGER li;
     li.QuadPart = offset;
-    li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, mode);
+    li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, (DWORD)mode);
     error_ = ::GetLastError();
     if (li.LowPart == INVALID_SET_FILE_POINTER && error_ != NO_ERROR)
         return false;
