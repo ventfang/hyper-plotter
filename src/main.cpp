@@ -9,6 +9,7 @@ namespace compute = boost::compute;
 
 #include <OptionParser.h>
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
 #include "config.h"
@@ -67,9 +68,18 @@ int main(int argc, char* argv[]) {
   try {
     opt::Values& options = parser.parse_args(argc, argv);
     vector<string> dirs = parser.args();
-
+    options["argv"] = accumulate(argv, argv+argc, string{"cmdline:"},
+                                [](string a, const string b) -> decltype(auto) {
+                                  return  std::move(a) + " " + b;
+                                });
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("parallel-ploter.log");
+    auto sinks = spdlog::sinks_init_list{ console_sink, file_sink };
+    auto default_logger = std::make_shared<spdlog::logger>("logger", sinks);
+    spdlog::set_default_logger(default_logger);   
     spdlog::set_pattern("%^%v%$");
     spdlog::info(parser.get_version());
+    spdlog::info(options["argv"]);
 
     if ((int)options.get("verbose") > 0) {
       spdlog::set_level(spdlog::level::trace);
