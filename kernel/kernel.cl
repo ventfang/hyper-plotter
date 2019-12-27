@@ -495,11 +495,10 @@ __kernel void ploting(__global unsigned char* buffer
 			M2 = ((unsigned int*)&seed2)[0];
 			M3 = ((unsigned int*)&seed2)[1];
 			M4 = ((unsigned int*)&seed3)[0];
-			M5 = ((unsigned int*)&seed3)[1];
-			M6 = ((unsigned int*)&nonce_be)[0];
-			M7 = ((unsigned int*)&nonce_be)[1];
-			M8 = 0x80;
-			M9 = MA = MB = MC = MD = ME = MF = 0;
+			M5 = ((unsigned int*)&nonce_be)[0];
+			M6 = ((unsigned int*)&nonce_be)[1];
+			M7 = 0x80;
+			M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
 		}
 		else if((hash & 1) == 1) {
 			M0 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 0)];
@@ -515,9 +514,9 @@ __kernel void ploting(__global unsigned char* buffer
 			MA = ((unsigned int*)&seed2)[0];
 			MB = ((unsigned int*)&seed2)[1];
 			MC = ((unsigned int*)&seed3)[0];
-			MD = ((unsigned int*)&seed3)[1];
-			ME = ((unsigned int*)&nonce_be)[0];
-			MF = ((unsigned int*)&nonce_be)[1];
+			MD = ((unsigned int*)&nonce_be)[0];
+			ME = ((unsigned int*)&nonce_be)[1];
+			MF = 0x80;
 		}
 
 		INPUT_BLOCK_ADD;

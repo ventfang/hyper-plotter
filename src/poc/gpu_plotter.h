@@ -55,10 +55,9 @@ struct gpu_plotter : public plotter_base {
     dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
     kernel_ = compute::kernel{program_, name};
 
-    *((uint32_t*)(seed_.data() + PLOT_SIZE + 0)) = *((uint32_t*)SEED_MAGIC);
-    *((uint32_t*)(seed_.data() + PLOT_SIZE + 4)) = *((uint32_t*)(plot_id.data() + 0));
-    *((uint64_t*)(seed_.data() + PLOT_SIZE + 8)) = *((uint64_t*)(plot_id.data() + 4));
-    *((uint64_t*)(seed_.data() + PLOT_SIZE + 16)) = *((uint64_t*)(plot_id.data() + 12));
+    *((uint64_t*)(seed_.data() + PLOT_SIZE + 0)) = *((uint64_t*)(plot_id.data() + 0));
+    *((uint64_t*)(seed_.data() + PLOT_SIZE + 8)) = *((uint64_t*)(plot_id.data() + 8));
+    *((uint32_t*)(seed_.data() + PLOT_SIZE + 16)) = *((uint32_t*)(plot_id.data() + 16));
     return true;
   }
 
