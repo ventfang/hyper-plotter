@@ -2,6 +2,9 @@
 
 #include <cstdint>
 #include <string>
+#include <array>
+
+using plot_id_t = std::array<uint8_t, 20>;
 
 struct plotter_base {
   static constexpr int HASH_SIZE = 32;
@@ -12,7 +15,7 @@ struct plotter_base {
   static constexpr int SEED_LENGTH = 32;
   static constexpr int PLOT_TOTAL_SIZE = PLOT_SIZE + SEED_LENGTH;
   static constexpr int HASH_CAP = 4096;
-  static constexpr char SEED_MAGIC[] = "Lava";
+  static constexpr char SEED_MAGIC[] = "\0\0\0\0";
 
   static constexpr char HEX_CHARS[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                                         'a', 'b', 'c', 'd', 'e', 'f' };
@@ -55,8 +58,8 @@ struct plotter_base {
     return hex;
   }
 
-  static std::pair<bool, std::array<uint8_t, 20>> to_plot_id_bytes(std::string plot_id_hex) {
-    std::array<uint8_t, 20> bytes{0};
+  static std::pair<bool, plot_id_t> to_plot_id_bytes(std::string plot_id_hex) {
+    plot_id_t bytes{0};
     assert(plot_id_hex.size() == 40);
     if (plot_id_hex.size() != 40)
       return {false, bytes};

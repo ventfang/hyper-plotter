@@ -412,12 +412,19 @@ __constant static const sph_u32 C_init_512[] = {
 /* Johnny's optimised nonce calculation kernel 
  * based on the implementation found in BRS
  */
-__kernel void ploting(__global unsigned char* buffer, unsigned long startnonce, unsigned long numeric_id_be, int start, int end, unsigned long nonces) {
+__kernel void ploting(__global unsigned char* buffer
+										, unsigned long seed1
+										, unsigned long seed2
+										, unsigned long seed3
+										, unsigned long startnonce
+										, unsigned long nonces
+										, int start
+										, int end) {
 	int gid = get_global_id(0);
 
 	if (gid >= nonces)
 		return;
-	//printf("current nonce: %d\n", gid);
+	//printf("args: %llx, %llx, %llx, %lld, %lld, %d, %d\n", seed1, seed2, seed3, startnonce, nonces, start, end);
 	
 	// number of shabal message round
 	int num; 
@@ -433,23 +440,23 @@ __kernel void ploting(__global unsigned char* buffer, unsigned long startnonce, 
 			num = (num > MESSAGE_CAP) ? MESSAGE_CAP : num;
 		} 
 
-		// init shabal
-        sph_u32
-            A00 = A_init_256[0], A01 = A_init_256[1], A02 = A_init_256[2], A03 = A_init_256[3],
-            A04 = A_init_256[4], A05 = A_init_256[5], A06 = A_init_256[6], A07 = A_init_256[7],
-            A08 = A_init_256[8], A09 = A_init_256[9], A0A = A_init_256[10], A0B = A_init_256[11];
-        sph_u32
-            B0 = B_init_256[0], B1 = B_init_256[1], B2 = B_init_256[2], B3 = B_init_256[3],
-            B4 = B_init_256[4], B5 = B_init_256[5], B6 = B_init_256[6], B7 = B_init_256[7];
-            B8 = B_init_256[8]; B9 = B_init_256[9]; BA = B_init_256[10]; BB = B_init_256[11];
-            BC = B_init_256[12]; BD = B_init_256[13]; BE = B_init_256[14]; BF = B_init_256[15];
-        sph_u32
-            C0 = C_init_256[0], C1 = C_init_256[1], C2 = C_init_256[2], C3 = C_init_256[3],
-            C4 = C_init_256[4], C5 = C_init_256[5], C6 = C_init_256[6], C7 = C_init_256[7],
-            C8 = C_init_256[8], C9 = C_init_256[9], CA = C_init_256[10], CB = C_init_256[11],
-            CC = C_init_256[12], CD = C_init_256[13], CE = C_init_256[14], CF = C_init_256[15];
-        sph_u32 M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, MA, MB, MC, MD, ME, MF;
-        sph_u32 Wlow = 1, Whigh = 0;
+		// init shabal	
+		sph_u32
+				A00 = A_init_256[0], A01 = A_init_256[1], A02 = A_init_256[2], A03 = A_init_256[3],
+				A04 = A_init_256[4], A05 = A_init_256[5], A06 = A_init_256[6], A07 = A_init_256[7],
+				A08 = A_init_256[8], A09 = A_init_256[9], A0A = A_init_256[10], A0B = A_init_256[11];
+		sph_u32
+				B0 = B_init_256[0], B1 = B_init_256[1], B2 = B_init_256[2], B3 = B_init_256[3],
+				B4 = B_init_256[4], B5 = B_init_256[5], B6 = B_init_256[6], B7 = B_init_256[7];
+				B8 = B_init_256[8]; B9 = B_init_256[9]; BA = B_init_256[10]; BB = B_init_256[11];
+				BC = B_init_256[12]; BD = B_init_256[13]; BE = B_init_256[14]; BF = B_init_256[15];
+		sph_u32
+				C0 = C_init_256[0], C1 = C_init_256[1], C2 = C_init_256[2], C3 = C_init_256[3],
+				C4 = C_init_256[4], C5 = C_init_256[5], C6 = C_init_256[6], C7 = C_init_256[7],
+				C8 = C_init_256[8], C9 = C_init_256[9], CA = C_init_256[10], CB = C_init_256[11],
+				CC = C_init_256[12], CD = C_init_256[13], CE = C_init_256[14], CF = C_init_256[15];
+		sph_u32 M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, MA, MB, MC, MD, ME, MF;
+		sph_u32 Wlow = 1, Whigh = 0;
 	
 		for (int i = 0; i < 2 * num; i+=2){
 			M0 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 0)];
@@ -469,52 +476,58 @@ __kernel void ploting(__global unsigned char* buffer, unsigned long startnonce, 
 			ME = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 6)];
 			MF = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 7)];
 
-    		INPUT_BLOCK_ADD;
-    		XOR_W;
-    		APPLY_P;
-    		INPUT_BLOCK_SUB;
-    		SWAP_BC;
-    		INCR_W;
-    	}
+			INPUT_BLOCK_ADD;
+			XOR_W;
+			APPLY_P;
+			INPUT_BLOCK_SUB;
+			SWAP_BC;
+			INCR_W;
+		}
 
 		// final message determination
 		if (num == MESSAGE_CAP) {
-            M0 = 0x80;
-            M1 = M2 = M3 = M4 = M5 = M6 = M7 = M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
-        }
-        else if((hash & 1) == 0) {
-            M0 = ((unsigned int*)&numeric_id_be)[0];
-            M1 = ((unsigned int*)&numeric_id_be)[1];
-            M2 = ((unsigned int*)&nonce_be)[0];
-            M3 = ((unsigned int*)&nonce_be)[1];
-            M4 = 0x80;
-            M5 = M6 = M7 = M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
-        }
-        else if((hash & 1) == 1) {
-            M0 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 0)];
-            M1 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 1)];
-            M2 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 2)];
-            M3 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 3)];
-            M4 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 4)];
-            M5 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 5)];
-            M6 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 6)];
-            M7 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 7)];
-            M8 = ((unsigned int*)&numeric_id_be)[0];
-            M9 = ((unsigned int*)&numeric_id_be)[1];
-            MA = ((unsigned int*)&nonce_be)[0];
-            MB = ((unsigned int*)&nonce_be)[1];
-            MC = 0x80;
-            MD = ME = MF = 0;
+			M0 = 0x80;
+			M1 = M2 = M3 = M4 = M5 = M6 = M7 = M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
+		}
+		else if((hash & 1) == 0) {
+			M0 = ((unsigned int*)&seed1)[0];
+			M1 = ((unsigned int*)&seed1)[1];
+			M2 = ((unsigned int*)&seed2)[0];
+			M3 = ((unsigned int*)&seed2)[1];
+			M4 = ((unsigned int*)&seed3)[0];
+			M5 = ((unsigned int*)&seed3)[1];
+			M6 = ((unsigned int*)&nonce_be)[0];
+			M7 = ((unsigned int*)&nonce_be)[1];
+			M8 = 0x80;
+			M9 = MA = MB = MC = MD = ME = MF = 0;
+		}
+		else if((hash & 1) == 1) {
+			M0 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 0)];
+			M1 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 1)];
+			M2 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 2)];
+			M3 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 3)];
+			M4 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 4)];
+			M5 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 5)];
+			M6 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 6)];
+			M7 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 7)];
+			M8 = ((unsigned int*)&seed1)[0];
+			M9 = ((unsigned int*)&seed1)[1];
+			MA = ((unsigned int*)&seed2)[0];
+			MB = ((unsigned int*)&seed2)[1];
+			MC = ((unsigned int*)&seed3)[0];
+			MD = ((unsigned int*)&seed3)[1];
+			ME = ((unsigned int*)&nonce_be)[0];
+			MF = ((unsigned int*)&nonce_be)[1];
 		}
 
-    	INPUT_BLOCK_ADD;
-    	XOR_W;
-    	APPLY_P;
-    	for (int i = 0; i < 3; i ++) {
-	        SWAP_BC;
-        	XOR_W;
-        	APPLY_P;
-    	}
+		INPUT_BLOCK_ADD;
+		XOR_W;
+		APPLY_P;
+		for (int i = 0; i < 3; i ++) {
+			SWAP_BC;
+			XOR_W;
+			APPLY_P;
+		}
 
 		if (hash > 0){
 			((__global unsigned int*)buffer)[Address(gid, hash-1, 0)] = B8;		

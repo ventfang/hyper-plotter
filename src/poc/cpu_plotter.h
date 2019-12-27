@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include "plotter_base.h"
 #include "shabal/shabal.h"
 
@@ -17,7 +16,7 @@ struct cpu_plotter : public plotter_base {
   cpu_plotter& operator=(cpu_plotter&) = delete;
   cpu_plotter& operator=(cpu_plotter&&) = delete;
 
-  void plot(std::array<uint8_t, 20> plot_id, uint64_t nonce) {
+  void plot(plot_id_t plot_id, uint64_t nonce) {
     *((uint32_t*)(data_ + PLOT_SIZE + 0)) = *((uint32_t*)SEED_MAGIC);
     *((uint32_t*)(data_ + PLOT_SIZE + 4)) = *((uint32_t*)(plot_id.data() + 0));
     *((uint64_t*)(data_ + PLOT_SIZE + 8)) = *((uint64_t*)(plot_id.data() + 4));

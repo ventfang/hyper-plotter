@@ -98,7 +98,7 @@ void writer_worker::run() {
         }
       }
       perform_write_plot(wr_task, task);
-      task->mbps = task->nonces * 1000ull * plotter_base::PLOT_SIZE / 1024 / 1024 / timer.elapsed();
+      task->mbps = int(task->nonces * 1000ull * plotter_base::PLOT_SIZE / 1024 / 1024 / timer.elapsed());
     }
     spdlog::debug("write nonce [{}][{}, {}) ({}) to `{}`"
                   , task->current_write_task

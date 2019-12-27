@@ -20,7 +20,7 @@ void plotter::run_test() {
   auto nonces = (int32_t)std::stoull(args_["num"]);
 
   bool valid;
-  std::array<uint8_t, 20> plot_id;
+  plot_id_t plot_id;
   std::tie(valid, plot_id) = plotter_base::to_plot_id_bytes(plot_id_hex);
   if (!valid) {
     spdlog::info("invalid plot id {}", plot_id_hex);
@@ -36,11 +36,39 @@ void plotter::run_test() {
   auto&& chash = cplot.to_string();
   spdlog::info("cpu plot hash: 0x{}", chash.substr(0, 64));
   spdlog::info("cpu plot time cost: {} ms.", timer1.elapsed());
+
+  spdlog::info("do test gpu plot: {}_{}_{}_{}", plotter_base::SEED_MAGIC, plot_id_hex, start_nonce, nonces);
+  auto plot_args = gpu_plotter::args_t{std::stoull(args_["lws"])
+                                      ,std::stoull(args_["gws"])
+                                      ,(int32_t)std::stoull(args_["step"])
+                                      };
+  gpu_plotter gplot(gpu, plot_args);
+  auto res = gplot.init("./kernel/kernel.cl", "ploting", plot_id);
+  if (!res)
+    spdlog::error("init gpu plotter failed. kernel build log: {}", gplot.program().build_log());
+  std::string buff;
+  buff.resize(gplot.global_work_size() * gpu_plotter::PLOT_SIZE);
+  util::timer timer2;
+  for (size_t i=0; i<nonces; i+=gplot.global_work_size())
+    gplot.plot( start_nonce
+              , nonces
+              , (uint8_t*)buff.data()
+              );
+  spdlog::info("gpu plot time cost: {} ms.", timer2.elapsed());
+  auto ghash = gplot.to_string((uint8_t*)buff.data(), 32);
+  spdlog::info("gpu plot hash: 0x{}", ghash);
 }
 
 void plotter::run_plotter() {
   signal::get().install_signal();
-  const auto plot_id = std::stoull(args_["id"]);
+  auto plot_id_hex = args_["id"];
+  bool valid;
+  plot_id_t plot_id;
+  std::tie(valid, plot_id) = plotter_base::to_plot_id_bytes(plot_id_hex);
+  if (!valid) {
+    spdlog::info("invalid plot id {}", plot_id_hex);
+    return;
+  }
   const auto start_nonce = std::stoull(args_["sn"]);
   auto total_nonces = std::stoull(args_["num"]);
   const auto max_mem_to_use = (args_["mem"] == "0")
@@ -63,7 +91,7 @@ void plotter::run_plotter() {
   const auto max_nonces_per_file = max_weight_per_file / plotter_base::PLOT_SIZE;
   const auto total_files = std::ceil(total_nonces * 1. / max_nonces_per_file);
 
-  spdlog::warn("plot id:              {}", plot_id);
+  spdlog::warn("plot id:              {}", plotter_base::btoh(plot_id.data(), 20));
   spdlog::warn("start nonce:          {}", start_nonce);
   auto total_size_gb = total_nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
   spdlog::warn("total nonces:         {} ({} GB)", total_nonces, size_t(total_size_gb*100)/100.);
@@ -96,7 +124,7 @@ void plotter::run_plotter() {
         continue;
       if (nonces_to_gen < 16)
         break;
-      auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, (uint32_t)nonces, writers[driver]->canonical_driver());
+      auto task = std::make_shared<writer_task>(plot_id_hex, sn_to_gen, (uint32_t)nonces, writers[driver]->canonical_driver());
       sn_to_gen += nonces;
       nonces_to_gen -= nonces;
       free_spaces[driver] = free_spaces[driver] - (int64_t)nonces * plotter_base::PLOT_SIZE - 16 * 1024;
@@ -116,7 +144,7 @@ void plotter::run_plotter() {
                                       };
   auto device = compute::system::default_device();
   auto ploter = std::make_shared<gpu_plotter>(device, plot_args);
-  auto res = ploter->init("./kernel/kernel.cl", "ploting");
+  auto res = ploter->init("./kernel/kernel.cl", "ploting", plot_id);
   if (!res)
     spdlog::error("init gpu plotter failed. kernel build log: {}", ploter->program().build_log());
   auto hashing = std::make_shared<hasher_worker>(*this, ploter);
@@ -129,7 +157,10 @@ void plotter::run_plotter() {
   for (auto& w : workers_) {
     spdlog::warn("* {}", w->info(true));
   }
-  spdlog::error("* Plotting {} - [{}, {}) ...", plot_id, start_nonce, start_nonce+total_nonces);
+  spdlog::error("* Plotting {} - [{}, {}), total {} nonces ({} GB)..."
+              , plot_id_hex, start_nonce, start_nonce+total_nonces
+              , total_nonces
+              , total_nonces / 1024 / 1024 / 1024);
 
   std::cout << "Confirm and Continue [y/N]: ";
   auto yn = std::getc(stdin);

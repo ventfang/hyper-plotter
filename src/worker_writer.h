@@ -46,7 +46,7 @@ public:
         ++cur_writer_task_index_;
         continue;
       }
-      auto ht = std::make_shared<hasher_task>(wt->pid, wt->sn, nonces
+      auto ht = std::make_shared<hasher_task>(wt->sn, nonces
                                             , shared_from_this()
                                             , cur_writer_task_index_
                                             , &block);

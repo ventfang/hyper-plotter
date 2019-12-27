@@ -5,14 +5,13 @@
 #include "task.h"
 
 struct writer_task {
-  explicit writer_task(uint64_t _pid, uint64_t _sn, int32_t _nonces, std::string _driver)
-    : pid(_pid), sn(_sn), nonces(_nonces), init_nonces(_nonces), init_sn(_sn), prev_(_sn) {
+  explicit writer_task(std::string _pid, uint64_t _sn, int32_t _nonces, std::string _driver)
+    : sn(_sn), nonces(_nonces), init_nonces(_nonces), init_sn(_sn), prev_(_sn) {
       std::stringstream ss;
-      ss << _driver << pid << "_" << sn << "_" << nonces;
+      ss << _driver << _pid << "_" << sn << "_" << nonces;
       pf_ = ss.str();
   }
 
-  uint64_t pid;
   uint64_t sn;
   int32_t  nonces;
   int64_t  init_nonces{0};

@@ -41,7 +41,7 @@ struct gpu_plotter : public plotter_base {
       global_work_size_ = 16;
   }
 
-  bool init(const std::string& kernel, const std::string& name) {
+  bool init(const std::string& kernel, const std::string& name, const plot_id_t& plot_id) {
     spdlog::debug("loading opencl kernel...");
     program_ = compute::program::create_with_source_file(kernel, context_);
     try {
@@ -54,14 +54,21 @@ struct gpu_plotter : public plotter_base {
     dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
     dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
     kernel_ = compute::kernel{program_, name};
+
+    *((uint32_t*)(seed_.data() + PLOT_SIZE + 0)) = *((uint32_t*)SEED_MAGIC);
+    *((uint32_t*)(seed_.data() + PLOT_SIZE + 4)) = *((uint32_t*)(plot_id.data() + 0));
+    *((uint64_t*)(seed_.data() + PLOT_SIZE + 8)) = *((uint64_t*)(plot_id.data() + 4));
+    *((uint64_t*)(seed_.data() + PLOT_SIZE + 16)) = *((uint64_t*)(plot_id.data() + 12));
     return true;
   }
 
-  void plot(uint64_t plot_id, uint64_t start_nonce, size_t nonces, uint8_t* host_buff) {
+  void plot(uint64_t start_nonce, size_t nonces, uint8_t* host_buff) {
     nonces = std::min(nonces, global_work_size_);
     kernel_.set_arg(0, dev_buff_[0]);
-    kernel_.set_arg(1, start_nonce);
-    kernel_.set_arg(2, hton_ull(plot_id));
+    kernel_.set_arg(1, *((uint64_t*)(seed_.data() + PLOT_SIZE + 0)));
+    kernel_.set_arg(2, *((uint64_t*)(seed_.data() + PLOT_SIZE + 8)));
+    kernel_.set_arg(3, *((uint64_t*)(seed_.data() + PLOT_SIZE + 16)));
+    kernel_.set_arg(4, start_nonce);
     kernel_.set_arg(5, nonces);
 
     try {
@@ -69,8 +76,8 @@ struct gpu_plotter : public plotter_base {
       for (int i = 8192; i > 0; i -= step_) {
         start = i;
         end = i - step_ - !(i ^ step_);
-        kernel_.set_arg(3, start);
-        kernel_.set_arg(4, end);
+        kernel_.set_arg(6, start);
+        kernel_.set_arg(7, end);
         cqueue_.enqueue_1d_range_kernel(kernel_, 0, global_work_size_, local_work_size_);
       }
       cqueue_.finish();
@@ -104,6 +111,7 @@ private:
   compute::kernel kernel_;
   compute::command_queue cqueue_;
   std::vector<compute::buffer> dev_buff_;
+  std::array<uint8_t, 24> seed_;
   int working_dev_buff_{0};
 
   int step_{ 32 };

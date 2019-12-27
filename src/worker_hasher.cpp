@@ -26,12 +26,11 @@ void hasher_worker::run() {
     // calc plot
     if ((bench_mode & 0x02) == 0) {
       util::timer timer;
-      plotter_->plot( task->pid
-                    , task->sn
+      plotter_->plot( task->sn
                     , task->nonces
                     , task->block->data()
                     );
-      task->npm = task->nonces * 60ull * 1000 / timer.elapsed();
+      task->npm = int(task->nonces * 60ull * 1000 / timer.elapsed());
     }
     report(task);
   }
