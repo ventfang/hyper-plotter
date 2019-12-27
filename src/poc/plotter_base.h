@@ -12,10 +12,10 @@ struct plotter_base {
   static constexpr int SCOOP_SIZE = HASHES_PER_SCOOP * HASH_SIZE;
   static constexpr int SCOOPS_PER_PLOT = 4096;
   static constexpr int PLOT_SIZE = SCOOPS_PER_PLOT * SCOOP_SIZE;
-  static constexpr int SEED_LENGTH = 28;
+  static constexpr int SEED_LENGTH = 31;
   static constexpr int PLOT_TOTAL_SIZE = PLOT_SIZE + SEED_LENGTH;
   static constexpr int HASH_CAP = 4096;
-  static constexpr char SEED_MAGIC[] = "\0\0\0\0";
+  static constexpr char SEED_MAGIC[] = "LV\x0\x80";
 
   static constexpr char HEX_CHARS[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                                         'a', 'b', 'c', 'd', 'e', 'f' };

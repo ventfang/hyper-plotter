@@ -389,7 +389,9 @@ __constant static const sph_u32 C_init_512[] = {
 #define NONCES_VECTOR           16
 #define NONCES_VECTOR_MASK      15
 #define NONCES_VECTOR_ALIGN     (~15)
-#define MESSAGE_CAP             64
+#define MESSAGE_CAP             128
+#define MESSAGE_MASK            287457278
+#define MESSAGE_SEP             8063
 #define NUM_HASHES              8192
 #define HASH_SIZE_WORDS         8
 #define NONCE_SIZE_WORDS        HASH_SIZE_WORDS * NUM_HASHES
@@ -435,10 +437,7 @@ __kernel void ploting(__global unsigned char* buffer
 	// run 8192 rounds + final round 
 	for (int hash = start; hash > end; hash -= 1) {
 		// calculate number of shabal messages excl. final message
-		num = (NUM_HASHES - hash) >> 1; 
-		if (hash != 0) { 
-			num = (num > MESSAGE_CAP) ? MESSAGE_CAP : num;
-		} 
+		num = (!!hash && (hash < MESSAGE_SEP)) ? MESSAGE_CAP : (NUM_HASHES - hash) & MESSAGE_MASK;
 
 		// init shabal	
 		sph_u32
@@ -458,7 +457,7 @@ __kernel void ploting(__global unsigned char* buffer
 		sph_u32 M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, MA, MB, MC, MD, ME, MF;
 		sph_u32 Wlow = 1, Whigh = 0;
 	
-		for (int i = 0; i < 2 * num; i+=2){
+		for (int i = 0; i < num; i+=2){
 			M0 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 0)];
 			M1 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 1)];
 			M2 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 2)];
@@ -490,14 +489,14 @@ __kernel void ploting(__global unsigned char* buffer
 			M1 = M2 = M3 = M4 = M5 = M6 = M7 = M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
 		}
 		else if((hash & 1) == 0) {
-			M0 = ((unsigned int*)&seed1)[0];
-			M1 = ((unsigned int*)&seed1)[1];
-			M2 = ((unsigned int*)&seed2)[0];
-			M3 = ((unsigned int*)&seed2)[1];
-			M4 = ((unsigned int*)&seed3)[0];
-			M5 = ((unsigned int*)&nonce_be)[0];
-			M6 = ((unsigned int*)&nonce_be)[1];
-			M7 = 0x80;
+			M0 = ((unsigned int*)&nonce_be)[0];
+			M1 = ((unsigned int*)&nonce_be)[1];
+			M2 = ((unsigned int*)&seed1)[0];
+			M3 = ((unsigned int*)&seed1)[1];
+			M4 = ((unsigned int*)&seed2)[0];
+			M5 = ((unsigned int*)&seed2)[1];
+			M6 = ((unsigned int*)&seed3)[0];
+			M7 = ((unsigned int*)&seed3)[1];
 			M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
 		}
 		else if((hash & 1) == 1) {
@@ -509,14 +508,14 @@ __kernel void ploting(__global unsigned char* buffer
 			M5 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 5)];
 			M6 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 6)];
 			M7 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 7)];
-			M8 = ((unsigned int*)&seed1)[0];
-			M9 = ((unsigned int*)&seed1)[1];
-			MA = ((unsigned int*)&seed2)[0];
-			MB = ((unsigned int*)&seed2)[1];
-			MC = ((unsigned int*)&seed3)[0];
-			MD = ((unsigned int*)&nonce_be)[0];
-			ME = ((unsigned int*)&nonce_be)[1];
-			MF = 0x80;
+			M8 = ((unsigned int*)&nonce_be)[0];
+			M9 = ((unsigned int*)&nonce_be)[1];
+			MA = ((unsigned int*)&seed1)[0];
+			MB = ((unsigned int*)&seed1)[1];
+			MC = ((unsigned int*)&seed2)[0];
+			MD = ((unsigned int*)&seed2)[1];
+			ME = ((unsigned int*)&seed3)[0];
+			MF = ((unsigned int*)&seed3)[1];
 		}
 
 		INPUT_BLOCK_ADD;

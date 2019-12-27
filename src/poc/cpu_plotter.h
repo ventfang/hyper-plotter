@@ -17,10 +17,11 @@ struct cpu_plotter : public plotter_base {
   cpu_plotter& operator=(cpu_plotter&&) = delete;
 
   void plot(plot_id_t plot_id, uint64_t nonce) {
-    *((uint64_t*)(data_ + PLOT_SIZE + 0))  = *((uint64_t*)(plot_id.data() + 0));
-    *((uint64_t*)(data_ + PLOT_SIZE + 8))  = *((uint64_t*)(plot_id.data() + 8));
-    *((uint32_t*)(data_ + PLOT_SIZE + 16)) = *((uint32_t*)(plot_id.data() + 16));
-    *((uint64_t*)(data_ + PLOT_SIZE + 20)) = hton_ull(nonce);
+    *((uint64_t*)(data_ + PLOT_SIZE + 0))  = hton_ull(nonce);
+    *((uint64_t*)(data_ + PLOT_SIZE + 8))  = *((uint64_t*)(plot_id.data() + 0));
+    *((uint64_t*)(data_ + PLOT_SIZE + 16)) = *((uint64_t*)(plot_id.data() + 8));
+    *((uint32_t*)(data_ + PLOT_SIZE + 24)) = *((uint32_t*)(plot_id.data() + 16));
+    *((uint32_t*)(data_ + PLOT_SIZE + 28)) = *((uint32_t*)(SEED_MAGIC));
     
     int len;
     Shabal256 shabal256;
