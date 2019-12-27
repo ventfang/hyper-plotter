@@ -9,12 +9,27 @@ struct plotter_base {
   static constexpr int SCOOP_SIZE = HASHES_PER_SCOOP * HASH_SIZE;
   static constexpr int SCOOPS_PER_PLOT = 4096;
   static constexpr int PLOT_SIZE = SCOOPS_PER_PLOT * SCOOP_SIZE;
-  static constexpr int SEED_LENGTH = 16;
+  static constexpr int SEED_LENGTH = 32;
   static constexpr int PLOT_TOTAL_SIZE = PLOT_SIZE + SEED_LENGTH;
   static constexpr int HASH_CAP = 4096;
+  static constexpr char SEED_MAGIC[] = "Lava";
 
   static constexpr char HEX_CHARS[] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
                                         'a', 'b', 'c', 'd', 'e', 'f' };
+  static constexpr char HEX_CHARS2[] = {
+    '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-',
+    '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-',
+    '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-',
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, '-', '-', '-', '-', '-', '-', '-',
+    10, 11, 12, 13, 14, 15, '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-',
+    '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-',
+    10, 11, 12, 13, 14, 15, '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-',
+    '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-', '-'
+  };
+  static_assert(sizeof(HEX_CHARS2) == 128, "invalid HEX_CHARS2");
+  static_assert(HEX_CHARS2['0'] == 0x00, "invalid HEX_CHARS2");
+  static_assert(HEX_CHARS2['a'] == 0x0a, "invalid HEX_CHARS2");
+  static_assert(HEX_CHARS2['A'] == 0x0a, "invalid HEX_CHARS2");
 
   static inline uint64_t hton_ull(uint64_t n)
   {
@@ -38,6 +53,22 @@ struct plotter_base {
     }
 
     return hex;
+  }
+
+  static std::pair<bool, std::array<uint8_t, 20>> to_plot_id_bytes(std::string plot_id_hex) {
+    std::array<uint8_t, 20> bytes{0};
+    assert(plot_id_hex.size() == 40);
+    if (plot_id_hex.size() != 40)
+      return {false, bytes};
+    auto data = plot_id_hex.data();
+    for (auto i=0; i<plot_id_hex.size(); ++i,++i) {
+      auto h = HEX_CHARS2[data[i]];
+      auto l = HEX_CHARS2[data[i + 1]];
+      if (h == '-' || l == '-')
+        return {false, bytes};
+      bytes[i >> 1] = (h << 4) | l;
+    }
+    return {true, bytes};
   }
 
 };

@@ -48,7 +48,7 @@ int main(int argc, char* argv[]) {
   static_assert(sizeof(unsigned long long) == 8, "unsigned long long must be equal to 8 bytes.");
   parser.add_option("-V", "--verbose").action("count").help("verbose, default: %default");
   parser.add_option("-t", "--test").action("count").help("test mode, default: %default");
-  parser.add_option("-i", "--id").action("store").type("uint64_t").set_default(0).help("plot id, default: %default");
+  parser.add_option("-i", "--id").action("store").type("string").set_default("ffffffffffffffffffffffffffffffffffffffff").help("plot id, default: %default");
   parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(0).help("start nonce, default: %default");
   parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(10000).help("number of nonces, default: %default");
   parser.add_option("-w", "--weight").action("store").type("double").set_default(1).help("plot file weight, default: %default (GB)");

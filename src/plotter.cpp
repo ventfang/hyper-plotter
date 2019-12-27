@@ -15,39 +15,27 @@ void plotter::run() {
 
 void plotter::run_test() {
   auto gpu = compute::system::default_device();
-  auto plot_id = std::stoull(args_["id"]);
+  auto plot_id_hex = args_["id"];
   auto start_nonce = std::stoull(args_["sn"]);
   auto nonces = (int32_t)std::stoull(args_["num"]);
 
-  spdlog::info("do test cpu plot: {}_{}_{}", plot_id, start_nonce, nonces);
+  bool valid;
+  std::array<uint8_t, 20> plot_id;
+  std::tie(valid, plot_id) = plotter_base::to_plot_id_bytes(plot_id_hex);
+  if (!valid) {
+    spdlog::info("invalid plot id {}", plot_id_hex);
+    return;
+  }
+  spdlog::info("do test cpu plot: {}_{}_{}_{}"
+              , plotter_base::SEED_MAGIC
+              , plotter_base::btoh(plot_id.data(), 20)
+              , start_nonce, nonces);
   util::timer timer1;
   cpu_plotter cplot;
   cplot.plot(plot_id, start_nonce);
   auto&& chash = cplot.to_string();
   spdlog::info("cpu plot hash: 0x{}", chash.substr(0, 64));
   spdlog::info("cpu plot time cost: {} ms.", timer1.elapsed());
-
-  spdlog::info("do test gpu plot: {}_{}_{}", plot_id, start_nonce, nonces);
-  auto plot_args = gpu_plotter::args_t{std::stoull(args_["lws"])
-                                      ,std::stoull(args_["gws"])
-                                      ,(int32_t)std::stoull(args_["step"])
-                                      };
-  gpu_plotter gplot(gpu, plot_args);
-  auto res = gplot.init("./kernel/kernel.cl", "ploting");
-  if (!res)
-    spdlog::error("init gpu plotter failed. kernel build log: {}", gplot.program().build_log());
-  std::string buff;
-  buff.resize(gplot.global_work_size() * gpu_plotter::PLOT_SIZE);
-  util::timer timer2;
-  for (size_t i=0; i<nonces; i+=gplot.global_work_size())
-    gplot.plot( plot_id
-              , start_nonce
-              , nonces
-              , (uint8_t*)buff.data()
-              );
-  spdlog::info("gpu plot time cost: {} ms.", timer2.elapsed());
-  auto ghash = gplot.to_string((uint8_t*)buff.data(), 32);
-  spdlog::info("gpu plot hash: 0x{}", ghash);
 }
 
 void plotter::run_plotter() {

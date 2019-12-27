@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include "plotter_base.h"
 #include "shabal/shabal.h"
 
@@ -16,9 +17,12 @@ struct cpu_plotter : public plotter_base {
   cpu_plotter& operator=(cpu_plotter&) = delete;
   cpu_plotter& operator=(cpu_plotter&&) = delete;
 
-  void plot(uint64_t plot_id, uint64_t nonce) {
-    *((uint64_t*)(data_ + PLOT_SIZE)) = hton_ull(plot_id);
-    *((uint64_t*)(data_ + PLOT_SIZE + 8)) = hton_ull(nonce);
+  void plot(std::array<uint8_t, 20> plot_id, uint64_t nonce) {
+    *((uint32_t*)(data_ + PLOT_SIZE + 0)) = *((uint32_t*)SEED_MAGIC);
+    *((uint32_t*)(data_ + PLOT_SIZE + 4)) = *((uint32_t*)(plot_id.data() + 0));
+    *((uint64_t*)(data_ + PLOT_SIZE + 8)) = *((uint64_t*)(plot_id.data() + 4));
+    *((uint64_t*)(data_ + PLOT_SIZE + 16)) = *((uint64_t*)(plot_id.data() + 12));
+    *((uint64_t*)(data_ + PLOT_SIZE + 24)) = hton_ull(nonce);
     
     int len;
     Shabal256 shabal256;
@@ -26,7 +30,7 @@ struct cpu_plotter : public plotter_base {
     for (int i = PLOT_SIZE; i > 0; i -= HASH_SIZE) {
       len = PLOT_TOTAL_SIZE - i;
       if (len > HASH_CAP) {
-          len = HASH_CAP;
+        len = HASH_CAP;
       }
       shabal256.update(data_ + i, len);
       shabal256.digest(data_ + i - HASH_SIZE);
@@ -35,7 +39,7 @@ struct cpu_plotter : public plotter_base {
     shabal256.close(hfinal);
 
     for (int i = 0; i < PLOT_SIZE; ++i) {
-        data_[i] ^= hfinal[i & 0x1f];
+      data_[i] ^= hfinal[i & 0x1f];
     }
 
     for (int i = 32, j = PLOT_SIZE - HASH_SIZE; i < (PLOT_SIZE / 2); i += 64, j -= 64) {
