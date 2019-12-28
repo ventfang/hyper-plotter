@@ -135,7 +135,8 @@ int main(int argc, char* argv[]) {
     }
 
     #ifdef WIN32
-    if ((int)options.get("plot") && !util::acquire_manage_volume_privs()) {
+    if (((int)options.get("plot") || (int)options.get("diskbench"))
+      && !util::acquire_manage_volume_privs()) {
       spdlog::error("\n\t\t\t************************************************"
                     "\n\t\t\t*** RUN WITHOUT PRIVILEGES will be very slow ***"
                     "\n\t\t\t***    restart with administrative rights.   ***"

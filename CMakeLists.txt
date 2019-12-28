@@ -3,6 +3,7 @@ project(Parallel-Ploter VERSION 0.1.0)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
   set(CMAKE_CXX_FLAGS_RELEASE "/MT")
+  set(CMAKE_CXX_FLAGS_DEBUG "/MTd")
 endif()
 
 IF(NOT CMAKE_BUILD_TYPE)
