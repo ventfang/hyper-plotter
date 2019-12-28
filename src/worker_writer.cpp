@@ -23,8 +23,8 @@
             + (word) * NONCES_VECTOR \
             + ((nonce) & NONCES_VECTOR_MASK)
 
-static void transposition(util::paged_block& block, uint8_t* write_buff, int cur_scoop, int nstart, int nsize) {
-  uint32_t* src = (uint32_t*)block.data();
+void transposition(uint8_t* data, uint8_t* write_buff, int cur_scoop, int nstart, int nsize) {
+  uint32_t* src = (uint32_t*)data;
   uint32_t* des = (uint32_t*)write_buff;
 
   for (; nsize-->0; ++nstart,des+=16) {
@@ -56,7 +56,7 @@ bool writer_worker::perform_write_plot(std::shared_ptr<writer_task>& write_task,
     osfile_.seek(offset);
     int nonces = hash_task->nonces;
     for (int nstart=0; !signal::get().stopped() && nonces>0; nonces-=SCOOPS_PER_WRITE, nstart+=SCOOPS_PER_WRITE) {
-      transposition(*hash_task->block, write_buffer_, cur_scoop, nstart, std::min(nonces, SCOOPS_PER_WRITE));
+      transposition(hash_task->block->data(), write_buffer_, cur_scoop, nstart, std::min(nonces, SCOOPS_PER_WRITE));
       osfile_.write(write_buffer_, std::min(nonces, SCOOPS_PER_WRITE) * 64);
     }
   }

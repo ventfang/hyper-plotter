@@ -95,3 +95,5 @@ private:
   std::vector<std::shared_ptr<writer_task>> writer_tasks_;
   util::queue<std::shared_ptr<hasher_task>> fin_hasher_tasks_;
 };
+
+extern void transposition(uint8_t* data, uint8_t* write_buff, int cur_scoop, int nstart, int nsize);

@@ -55,7 +55,9 @@ void plotter::run_test() {
               , (uint8_t*)buff.data()
               );
   spdlog::info("gpu plot time cost: {} ms.", timer2.elapsed());
-  auto ghash = gplot.to_string((uint8_t*)buff.data(), 32);
+  uint8_t hash[64];
+  transposition((uint8_t*)buff.data(), hash, 0, 0, 1);
+  auto ghash = gplot.to_string(hash, 32);
   spdlog::info("gpu plot hash: 0x{}", ghash);
 }
 
