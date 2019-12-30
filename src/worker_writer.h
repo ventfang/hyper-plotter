@@ -14,17 +14,17 @@
 
 class plotter;
 class writer_worker : public worker {
-  static constexpr int SCOOPS_PER_WRITE = 256;
+  static constexpr int SCOOPS_PER_WRITE = 8192;
   static constexpr int SCOOP_BYTES_PER_WRITE = SCOOPS_PER_WRITE * 64;
 public:
   writer_worker() = delete;
   explicit writer_worker(plotter& ctx, std::string& driver)
     : ctx_(ctx), driver_(driver) {
-    write_buffer_ = (uint8_t*) operator new[](SCOOP_BYTES_PER_WRITE, std::align_val_t(64));
+    write_buffer_ = (uint8_t*) operator new[](SCOOP_BYTES_PER_WRITE, std::align_val_t(4096));
     spdlog::debug("init writer worker {}.", driver);
   }
   ~writer_worker() {
-    operator delete[](write_buffer_, std::align_val_t(64));
+    operator delete[](write_buffer_, std::align_val_t(4096));
   }
 
   void task_do(std::shared_ptr<writer_task>& task) {}
@@ -95,3 +95,5 @@ private:
   std::vector<std::shared_ptr<writer_task>> writer_tasks_;
   util::queue<std::shared_ptr<hasher_task>> fin_hasher_tasks_;
 };
+
+extern void transposition(uint8_t* data, uint8_t* write_buff, int cur_scoop, int nstart, int nsize);

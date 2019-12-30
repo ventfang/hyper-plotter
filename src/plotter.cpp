@@ -72,7 +72,7 @@ void plotter::run_plotter() {
     return;
   }
 
-  const auto max_nonces_per_file = max_weight_per_file / plotter_base::PLOT_SIZE;
+  const auto max_nonces_per_file = (max_weight_per_file / plotter_base::PLOT_SIZE) & ~(15ull);
   const auto total_files = std::ceil(total_nonces * 1. / max_nonces_per_file);
 
   spdlog::warn("plot id:              {}", plot_id);
@@ -101,17 +101,15 @@ void plotter::run_plotter() {
         writers[driver] = worker;
         workers_.push_back(std::move(worker));
       }
-      const auto driver_max_nonces = (free_spaces[driver] - 16 * 1024) / plotter_base::PLOT_SIZE;
+      const auto driver_max_nonces = free_spaces[driver] / plotter_base::PLOT_SIZE;
       auto plot_nonces = (size_t)std::max(0ll, std::min((int64_t)max_nonces_per_file, driver_max_nonces));
-      auto nonces = std::min(nonces_to_gen, plot_nonces);
-      if (nonces < 16 || nonces >= INT32_MAX) // max 511T
+      auto nonces = std::min(nonces_to_gen, plot_nonces) & ~(7ull);
+      if (nonces < 8 || nonces >= INT32_MAX) // max 511T
         continue;
-      if (nonces_to_gen < 16)
-        break;
       auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, (uint32_t)nonces, writers[driver]->canonical_driver());
       sn_to_gen += nonces;
       nonces_to_gen -= nonces;
-      free_spaces[driver] = free_spaces[driver] - (int64_t)nonces * plotter_base::PLOT_SIZE - 16 * 1024;
+      free_spaces[driver] = free_spaces[driver] - (int64_t)nonces * plotter_base::PLOT_SIZE;
       writers[driver]->push_task(std::move(task));
       task_allocated = true;
     }
@@ -172,12 +170,13 @@ void plotter::run_plotter() {
       --on_going_task;
       vnpm = !!vnpm ? (vnpm * (workers_.size() - 1) + report->npm) / workers_.size() : report->npm;
       vmbps = !!vmbps ? (vmbps * (workers_.size() - 1) + report->mbps) / workers_.size() : report->mbps;
-      spdlog::warn("[{}%] PLOTTING at {}|{}|{}|{} nonces/min, {}|{} MB/s, time elapsed {} mins."
-                , uint64_t(finished_nonces * 100.) / total_nonces
-                , dispatched_nonces * 60ull * 1000 / plot_timer.elapsed()
+      spdlog::warn("[{}%] PLOTTING at {}|{} nonces/min, {} MB/s, finished: {}/{} GB, time elapsed {} mins."
+                , int64_t(finished_nonces * 10000. / total_nonces) / 100.
                 , finished_nonces * 60ull * 1000 / plot_timer.elapsed()
-                , report->npm, vnpm
-                , report->mbps, vmbps
+                , vnpm
+                , vmbps
+                , int64_t(finished_nonces * 25600ull / 1024. / 1024) / 100.
+                , int64_t(total_nonces * 25600ull / 1024. / 1024) / 100.
                 , int(plot_timer.elapsed() / 60.) / 1000.);
     }
     if (workers_.size() == 0)
@@ -193,14 +192,14 @@ void plotter::run_plotter() {
     if (on_going_task >= max_flying_tasks)
         continue;
 
-    if (hashing->task_queue_size() > 0llu)
+    if (hashing->task_queue_size() > 2llu)
       continue;
 
     if (cur_worker_pos >= max_worker_pos)
       cur_worker_pos = 0;
 
     auto wr_worker = std::dynamic_pointer_cast<writer_worker>(workers_[cur_worker_pos]);
-    if (wr_worker->task_queue_size() > 0) {
+    if (wr_worker->task_queue_size() > 1llu) {
       cur_worker_pos++;
       continue;
     }
@@ -274,7 +273,7 @@ void plotter::run_disk_bench() {
   if (util::file::exists(argvs[0])) {
     create = false;
   }
-  if (!osfile.open(argvs[0], create)) {
+  if (!osfile.open(argvs[0], create, true)) {
     spdlog::error("open {} failed {}", argvs[0], osfile.last_error());
     return;
   }
@@ -295,24 +294,29 @@ void plotter::run_disk_bench() {
   auto doflush = argvs.size() > 3 ? std::stoll(argvs[3]) : 0ull;
   size_t bytes_written = 0;
   size_t buffered_bytes = 0;
-  for (; total_bytes > 0; total_bytes-=bytes_per_write) {
-    if (doseek && !osfile.seek(std::max(0ll, total_bytes - bytes_per_write))) {
+  for (; total_bytes > 0;) {
+    auto bytes_to_write = std::min(total_bytes, bytes_per_write);
+    if (doseek && !osfile.seek(std::max(0ll, total_bytes - bytes_to_write))) {
       spdlog::error("seek failed.");
       break;
     }
-    if (!osfile.write(data, bytes_per_write)) {
+    if (!osfile.write(data, bytes_to_write)) {
       spdlog::error("write {} failed {}", argvs[0], osfile.last_error());
       spdlog::warn("total_bytes: {}, written: {}", bytes, bytes - total_bytes);
       break;
     }
-    bytes_written += bytes_per_write;
-    buffered_bytes += bytes_per_write;
+    bytes_written += bytes_to_write;
+    buffered_bytes += bytes_to_write;
+    total_bytes -= bytes_to_write;
     if (doflush && buffered_bytes > doflush * 1024 * 1024) {
       buffered_bytes = 0;
       osfile.flush();
     }
     if ((bytes_written & ~0x7ffffff) == bytes_written)
-      spdlog::info("bytes_written: {}, speed: {} MB/s", bytes_written, (bytes_written * 1000 / 1024 / 1024 / timer.elapsed()));
+      spdlog::info("bytes_written: {}, speed: {} MB/s, time elapsed: {} secs"
+        , bytes_written
+        , (bytes_written * 1000 / 1024 / 1024 / timer.elapsed()),
+        timer.elapsed() / 1000);
   }
   spdlog::warn("total_bytes: {}, written: {}, time elapsed: {} secs, speed: {} MB/s."
     , bytes, bytes - total_bytes, timer.elapsed() / 1000, bytes * 1000 / 1024 / 1024 / timer.elapsed());
