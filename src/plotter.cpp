@@ -43,7 +43,7 @@ void plotter::run_test() {
                                       ,(int32_t)std::stoull(args_["step"])
                                       };
   gpu_plotter gplot(gpu, plot_args);
-  auto res = gplot.init("./kernel/kernel.cl", "ploting", plot_id);
+  auto res = gplot.init("./kernel/kernel.cl", "plotting", plot_id);
   if (!res)
     spdlog::error("init gpu plotter failed. kernel build log: {}", gplot.program().build_log());
   std::string buff;
@@ -145,14 +145,14 @@ void plotter::run_plotter() {
                                       ,(int32_t)std::stoull(args_["step"])
                                       };
   auto device = compute::system::default_device();
-  auto ploter = std::make_shared<gpu_plotter>(device, plot_args);
-  auto res = ploter->init("./kernel/kernel.cl", "ploting", plot_id);
+  auto plotter = std::make_shared<gpu_plotter>(device, plot_args);
+  auto res = plotter->init("./kernel/kernel.cl", "plotting", plot_id);
   if (!res)
-    spdlog::error("init gpu plotter failed. kernel build log: {}", ploter->program().build_log());
-  auto hashing = std::make_shared<hasher_worker>(*this, ploter);
+    spdlog::error("init gpu plotter failed. kernel build log: {}", plotter->program().build_log());
+  auto hashing = std::make_shared<hasher_worker>(*this, plotter);
   workers_.push_back(hashing);
 
-  auto max_flying_tasks = max_mem_to_use / ploter->global_work_size() / plotter_base::PLOT_SIZE;
+  auto max_flying_tasks = max_mem_to_use / plotter->global_work_size() / plotter_base::PLOT_SIZE;
   max_flying_tasks = std::min(max_flying_tasks, workers_.size() * 2);
   spdlog::warn("max mem to use:       {} GB", max_mem_to_use / 1024 / 1024 / 1024);
   spdlog::warn("max flying tasks:     {} tasks", max_flying_tasks);
@@ -181,7 +181,7 @@ void plotter::run_plotter() {
   int finished_nonces{0};
   int dispatched_count{0};
   int finished_count{0};
-  int total_count{(int)std::ceil(total_nonces * 1. / ploter->global_work_size())};
+  int total_count{(int)std::ceil(total_nonces * 1. / plotter->global_work_size())};
   int on_going_task = 0;
   int64_t vnpm{0}, vmbps{0};
   while (! signal::get().stopped()) {
@@ -204,7 +204,7 @@ void plotter::run_plotter() {
     if (workers_.size() == 0)
       continue;
     if (finished_nonces == total_nonces) {
-      spdlog::info("Ploting finished!!!");
+      spdlog::info("Plotting finished!!!");
       break;
     }
     if (dispatched_nonces == total_nonces) {
@@ -225,13 +225,13 @@ void plotter::run_plotter() {
       cur_worker_pos++;
       continue;
     }
-    auto& nb = page_block_allocator.allocate(ploter->global_work_size() * plotter_base::PLOT_SIZE);
+    auto& nb = page_block_allocator.allocate(plotter->global_work_size() * plotter_base::PLOT_SIZE);
     if (! nb)
       continue;
 
     cur_worker_pos++;
 
-    auto ht = wr_worker->next_hasher_task((int)(ploter->global_work_size()), nb);
+    auto ht = wr_worker->next_hasher_task((int)(plotter->global_work_size()), nb);
     if (! ht) {
       page_block_allocator.retain(nb);
       continue;
@@ -273,14 +273,22 @@ void plotter::run_disk_bench() {
     std::sregex_token_iterator()
   };
   if (args.empty() || argvs.size() < 2) {
-    spdlog::error("error args: prog.exe filename 0|1|2 [0|1 [0|1]] (file preallocate seek flush)");
+    spdlog::error("error args: prog.exe filename -m Kib -w Kib 0|1|2 [0|1 [0|1]] (file preallocate seek flush)");
     return;
   }
 
-  constexpr auto bytes = 20ull*1024*1024*1024;
-  constexpr auto bytes_per_write = 16 * 1024;
-  spdlog::info("start disk bench mode");
-  auto total_bytes = bytes;
+  auto bytes = (args_["weight"] == "0")
+                      ? 1ull*1024*1024*1024
+                      : std::stoll(args_["weight"]) * 1024;
+  auto bytes_per_write = (args_["mem"] == "0")
+                                ? 16 * 1024
+                                : std::stoll(args_["mem"]) * 1024;
+  if (bytes_per_write < 1024)
+    bytes_per_write = 1024;
+  if (bytes < 100ull*1024*1024)
+    bytes = 100ull*1024*1024;
+  spdlog::info("start disk bench mode: total: {} GB,  single write: {} KB", bytes/1024./1024/1024, bytes_per_write / 1024.);
+  int64_t total_bytes = bytes;
   
   util::file osfile;
   auto create = true;
@@ -298,16 +306,18 @@ void plotter::run_disk_bench() {
       return;
     }
   }
-  uint8_t data[bytes_per_write];
+  auto data = new uint8_t[bytes_per_write];
   for (auto i=0; i<bytes_per_write; ++i)
     data[i] = 'a';
   util::timer timer;
-  osfile.seek(0);
+  if (!osfile.seek(0))
+    spdlog::error("seek failed {}.", osfile.last_error());
   auto doseek = argvs.size() > 2 && argvs[2] == "1";
   auto doflush = argvs.size() > 3 ? std::stoll(argvs[3]) : 0ull;
   size_t bytes_written = 0;
+  size_t buffered_bytes = 0;
   for (; total_bytes > 0; total_bytes-=bytes_per_write) {
-    if (doseek && !osfile.seek(total_bytes - bytes_per_write)) {
+    if (doseek && !osfile.seek(std::max(0ll, total_bytes - bytes_per_write))) {
       spdlog::error("seek failed.");
       break;
     }
@@ -317,13 +327,18 @@ void plotter::run_disk_bench() {
       break;
     }
     bytes_written += bytes_per_write;
-    if (doflush && bytes_written > doflush * 1024 * 1024) {
-      bytes_written = 0;
+    buffered_bytes += bytes_per_write;
+    if (doflush && buffered_bytes > doflush * 1024 * 1024) {
+      buffered_bytes = 0;
       osfile.flush();
     }
+    if ((bytes_written & ~0x7ffffff) == bytes_written)
+      spdlog::info("bytes_written: {}, speed: {} MB/s", bytes_written, (bytes_written * 1000 / 1024 / 1024 / timer.elapsed()));
   }
   spdlog::warn("total_bytes: {}, written: {}, time elapsed: {} secs, speed: {} MB/s."
     , bytes, bytes - total_bytes, timer.elapsed() / 1000, bytes * 1000 / 1024 / 1024 / timer.elapsed());
+  osfile.close();
+  spdlog::warn("finished.");
 }
 
 void plotter::report(std::shared_ptr<hasher_task>&& task) { reporter_.push(std::move(task)); }
