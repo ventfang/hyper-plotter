@@ -32,12 +32,12 @@ using namespace std;
 
 const string usage = "usage: %prog [OPTION]... [DIRECTORY]...";
 
-const string version = "%prog " PARALLEL_PLOTER_VER " " GIT_BRANCH "-" GIT_COMMIT_HASH "\n"
+const string version = "%prog " PARALLEL_PLOTTER_VER " " GIT_BRANCH "-" GIT_COMMIT_HASH "\n"
   "Copyright (C) 2019-2020 The FreeStyle developers\n"
   "Distributed under the MIT software license, see the accompanying\n"
   "file COPYING or http://www.opensource.org/licenses/mit-license.php.\n";
 
-const string desc = "The Parallel poc2 gpu ploter.";
+const string desc = "The Parallel poc2 gpu plotter.";
 
 int main(int argc, char* argv[]) {
   opt::OptionParser parser = opt::OptionParser()
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
                                   return  std::move(a) + " " + b;
                                 });
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("parallel-ploter.log");
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("parallel-plotter.log");
     auto sinks = spdlog::sinks_init_list{ console_sink, file_sink };
     auto default_logger = std::make_shared<spdlog::logger>("logger", sinks);
     spdlog::set_default_logger(default_logger);   

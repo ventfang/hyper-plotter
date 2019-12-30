@@ -2,7 +2,7 @@
 file(GLOB PP_SOURCES "*.cpp")
 file(GLOB OP_SOURCES "${PROJECT_SOURCE_DIR}/contrib/cpp-optparse/OptionParser.cpp")
 
-set(EXEC_NAME "parallel-ploter")
+set(EXEC_NAME "parallel-plotter")
 
 add_executable(${EXEC_NAME} ${PP_SOURCES} ${OP_SOURCES})
 

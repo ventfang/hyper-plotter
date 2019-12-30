@@ -33,7 +33,7 @@ void plotter::run_test() {
                                       ,(int32_t)std::stoull(args_["step"])
                                       };
   gpu_plotter gplot(gpu, plot_args);
-  auto res = gplot.init("./kernel/kernel.cl", "ploting");
+  auto res = gplot.init("./kernel/kernel.cl", "plotting");
   if (!res)
     spdlog::error("init gpu plotter failed. kernel build log: {}", gplot.program().build_log());
   std::string buff;
@@ -127,14 +127,14 @@ void plotter::run_plotter() {
                                       ,(int32_t)std::stoull(args_["step"])
                                       };
   auto device = compute::system::default_device();
-  auto ploter = std::make_shared<gpu_plotter>(device, plot_args);
-  auto res = ploter->init("./kernel/kernel.cl", "ploting");
+  auto plotter = std::make_shared<gpu_plotter>(device, plot_args);
+  auto res = plotter->init("./kernel/kernel.cl", "plotting");
   if (!res)
-    spdlog::error("init gpu plotter failed. kernel build log: {}", ploter->program().build_log());
-  auto hashing = std::make_shared<hasher_worker>(*this, ploter);
+    spdlog::error("init gpu plotter failed. kernel build log: {}", plotter->program().build_log());
+  auto hashing = std::make_shared<hasher_worker>(*this, plotter);
   workers_.push_back(hashing);
 
-  auto max_flying_tasks = max_mem_to_use / ploter->global_work_size() / plotter_base::PLOT_SIZE;
+  auto max_flying_tasks = max_mem_to_use / plotter->global_work_size() / plotter_base::PLOT_SIZE;
   max_flying_tasks = std::min(max_flying_tasks, workers_.size() * 2);
   spdlog::warn("max mem to use:       {} GB", max_mem_to_use / 1024 / 1024 / 1024);
   spdlog::warn("max flying tasks:     {} tasks", max_flying_tasks);
@@ -160,7 +160,7 @@ void plotter::run_plotter() {
   int finished_nonces{0};
   int dispatched_count{0};
   int finished_count{0};
-  int total_count{(int)std::ceil(total_nonces * 1. / ploter->global_work_size())};
+  int total_count{(int)std::ceil(total_nonces * 1. / plotter->global_work_size())};
   int on_going_task = 0;
   int64_t vnpm{0}, vmbps{0};
   while (! signal::get().stopped()) {
@@ -183,7 +183,7 @@ void plotter::run_plotter() {
     if (workers_.size() == 0)
       continue;
     if (finished_nonces == total_nonces) {
-      spdlog::info("Ploting finished!!!");
+      spdlog::info("Plotting finished!!!");
       break;
     }
     if (dispatched_nonces == total_nonces) {
@@ -204,13 +204,13 @@ void plotter::run_plotter() {
       cur_worker_pos++;
       continue;
     }
-    auto& nb = page_block_allocator.allocate(ploter->global_work_size() * plotter_base::PLOT_SIZE);
+    auto& nb = page_block_allocator.allocate(plotter->global_work_size() * plotter_base::PLOT_SIZE);
     if (! nb)
       continue;
 
     cur_worker_pos++;
 
-    auto ht = wr_worker->next_hasher_task((int)(ploter->global_work_size()), nb);
+    auto ht = wr_worker->next_hasher_task((int)(plotter->global_work_size()), nb);
     if (! ht) {
       page_block_allocator.retain(nb);
       continue;

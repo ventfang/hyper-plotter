@@ -412,7 +412,7 @@ __constant static const sph_u32 C_init_512[] = {
 /* Johnny's optimised nonce calculation kernel 
  * based on the implementation found in BRS
  */
-__kernel void ploting(__global unsigned char* buffer, unsigned long startnonce, unsigned long numeric_id_be, int start, int end, unsigned long nonces) {
+__kernel void plotting(__global unsigned char* buffer, unsigned long startnonce, unsigned long numeric_id_be, int start, int end, unsigned long nonces) {
 	int gid = get_global_id(0);
 
 	if (gid >= nonces)
