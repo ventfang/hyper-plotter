@@ -1,5 +1,6 @@
 #include <unordered_map>
 #include "plotter.h"
+#include "kernel.h"
 
 plotter::plotter(optparse::Values& args) : args_{args} {}
 
@@ -33,7 +34,7 @@ void plotter::run_test() {
                                       ,(int32_t)std::stoull(args_["step"])
                                       };
   gpu_plotter gplot(gpu, plot_args);
-  auto res = gplot.init("./kernel/kernel.cl", "plotting");
+  auto res = gplot.init(KERNEL_PROG, "plotting");
   if (!res)
     spdlog::error("init gpu plotter failed. kernel build log: {}", gplot.program().build_log());
   std::string buff;
@@ -131,7 +132,7 @@ void plotter::run_plotter() {
                                       };
   auto device = compute::system::default_device();
   auto plotter = std::make_shared<gpu_plotter>(device, plot_args);
-  auto res = plotter->init("./kernel/kernel.cl", "plotting");
+  auto res = plotter->init(KERNEL_PROG, "plotting");
   if (!res)
     spdlog::error("init gpu plotter failed. kernel build log: {}", plotter->program().build_log());
   auto hashing = std::make_shared<hasher_worker>(*this, plotter);
