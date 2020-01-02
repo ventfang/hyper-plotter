@@ -54,5 +54,5 @@ struct cpu_plotter : public plotter_base {
   size_t size() const { return PLOT_SIZE; }
 
 private:
-  uint8_t data_[PLOT_TOTAL_SIZE];
+  uint8_t data_[PLOT_TOTAL_SIZE + 1];
 };
