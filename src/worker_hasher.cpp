@@ -26,11 +26,20 @@ void hasher_worker::run() {
     // calc plot
     if ((bench_mode & 0x02) == 0) {
       util::timer timer;
-      plotter_->plot( task->sn
-                    , task->nonces
-                    , task->block->data()
-                    );
-      task->npm = int(task->nonces * 60ull * 1000 / timer.elapsed());
+      auto host_buff = task->block->data();
+      auto total_nonces = task->nonces;
+      auto start_nonces = task->sn;
+      while (total_nonces > 0) {
+        auto nonces = std::min(total_nonces, (int)plotter_->global_work_size());
+        plotter_->plot( start_nonces
+                      , nonces
+                      , host_buff
+                      );
+        total_nonces -= nonces;
+        start_nonces += nonces;
+        host_buff    += nonces * plotter_base::PLOT_SIZE;
+      }
+      task->npm = task->nonces * 60ull * 1000 / timer.elapsed();
     }
     report(task);
   }

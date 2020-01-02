@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.10)
 project(Parallel-Plotter VERSION 0.1.0)
 
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
-  set(CMAKE_CXX_FLAGS_RELEASE "/MT")
-  set(CMAKE_CXX_FLAGS_DEBUG "/MTd")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
 endif()
 
 IF(NOT CMAKE_BUILD_TYPE)
@@ -49,7 +49,6 @@ set(LIBRARY_OUTPUT_PATH "${PROJECT_BINARY_DIR}/lib")
 file(MAKE_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}")
 file(MAKE_DIRECTORY "${LIBRARY_OUTPUT_PATH}")
 file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/kernel")
-file(COPY kernel/kernel.cl  DESTINATION "${PROJECT_BINARY_DIR}/kernel")
 
 # untill boost 1.68 compute is fixed
 find_package(Boost 1.68 REQUIRED filesystem)
@@ -59,6 +58,7 @@ find_package(OpenCL REQUIRED)
 
 include_directories("${PROJECT_BINARY_DIR}/src")
 include_directories("${PROJECT_SOURCE_DIR}/src")
+include_directories("${PROJECT_SOURCE_DIR}/kernel/")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/cpp-optparse/")
 include_directories("${PROJECT_SOURCE_DIR}/contrib/spdlog/include/")

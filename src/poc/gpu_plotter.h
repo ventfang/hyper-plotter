@@ -37,13 +37,14 @@ struct gpu_plotter : public plotter_base {
     global_work_size_ = std::min(max_nonces, global_work_size_);
     global_work_size_  = global_work_size_ / args.lws * args.lws;
     assert(global_work_size_ >= 16);
+    assert((global_work_size_ & ~15ull) == global_work_size_);
     if (global_work_size_ < 16)
       global_work_size_ = 16;
   }
 
   bool init(const std::string& kernel, const std::string& name, const plot_id_t& plot_id) {
     spdlog::debug("loading opencl kernel...");
-    program_ = compute::program::create_with_source_file(kernel, context_);
+    program_ = compute::program::create_with_source(kernel, context_);
     try {
       spdlog::debug("compiling openc kernel...");
       program_.build();
@@ -82,6 +83,7 @@ struct gpu_plotter : public plotter_base {
       }
       cqueue_.finish();
       cqueue_.enqueue_read_buffer(dev_buff_[0], 0, global_work_size_*PLOT_SIZE, host_buff);
+      cqueue_.finish();
     } catch(compute::opencl_error& e) {
       spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
       throw e;
