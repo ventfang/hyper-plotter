@@ -14,7 +14,7 @@
 
 class plotter;
 class writer_worker : public worker {
-  static constexpr int SCOOPS_PER_WRITE = 8192;
+  static constexpr int SCOOPS_PER_WRITE = 16384;
   static constexpr int SCOOP_BYTES_PER_WRITE = SCOOPS_PER_WRITE * 64;
 public:
   writer_worker() = delete;

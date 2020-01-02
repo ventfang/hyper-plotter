@@ -72,7 +72,7 @@ void plotter::run_plotter() {
     return;
   }
 
-  const auto max_nonces_per_file = (max_weight_per_file / plotter_base::PLOT_SIZE) & ~(15ull);
+  const auto max_nonces_per_file = (max_weight_per_file / plotter_base::PLOT_SIZE) & ~(63ull);
   const auto total_files = std::ceil(total_nonces * 1. / max_nonces_per_file);
 
   spdlog::warn("plot id:              {}", plot_id);
@@ -87,34 +87,39 @@ void plotter::run_plotter() {
   std::unordered_map<std::string, int64_t> free_spaces;
   auto sn_to_gen = start_nonce;
   auto nonces_to_gen = total_nonces;
-  auto task_allocated = true;
-  for (; nonces_to_gen > 0 && task_allocated;) {
-    task_allocated = false;
-    for (auto& driver : drivers) {
-      if (! writers[driver]) {
-        auto canonical = driver;
-        if (canonical[canonical.size() - 1] != '\\' && canonical[canonical.size() - 1] != '/')
-          canonical += "\\";
-        // TODO: check disk root
-        free_spaces[driver] = util::sys_free_disk_bytes(driver);
-        auto worker = std::make_shared<writer_worker>(*this, canonical);
-        writers[driver] = worker;
-        workers_.push_back(std::move(worker));
+  auto fn_task_allocator = [&](uint64_t nonces_align) {
+    auto task_allocated = true;
+    for (; nonces_to_gen > 0 && task_allocated;) {
+      task_allocated = false;
+      for (auto& driver : drivers) {
+        if (! writers[driver]) {
+          auto canonical = driver;
+          if (canonical[canonical.size() - 1] != '\\' && canonical[canonical.size() - 1] != '/')
+            canonical += "\\";
+          // TODO: check disk root
+          free_spaces[driver] = util::sys_free_disk_bytes(driver);
+          auto worker = std::make_shared<writer_worker>(*this, canonical);
+          writers[driver] = worker;
+          workers_.push_back(std::move(worker));
+        }
+        const auto driver_max_nonces = free_spaces[driver] / plotter_base::PLOT_SIZE;
+        auto plot_nonces = (size_t)std::max(0ll, std::min((int64_t)max_nonces_per_file, driver_max_nonces));
+        auto nonces = std::min(nonces_to_gen, plot_nonces) & nonces_align;
+        if (nonces == 0 || nonces >= INT32_MAX) // max 511T
+          continue;
+        auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, (uint32_t)nonces, writers[driver]->canonical_driver());
+        sn_to_gen += nonces;
+        nonces_to_gen -= nonces;
+        free_spaces[driver] = free_spaces[driver] - (int64_t)nonces * plotter_base::PLOT_SIZE;
+        writers[driver]->push_task(std::move(task));
+        task_allocated = true;
       }
-      const auto driver_max_nonces = free_spaces[driver] / plotter_base::PLOT_SIZE;
-      auto plot_nonces = (size_t)std::max(0ll, std::min((int64_t)max_nonces_per_file, driver_max_nonces));
-      auto nonces = std::min(nonces_to_gen, plot_nonces) & ~(7ull);
-      if (nonces < 8 || nonces >= INT32_MAX) // max 511T
-        continue;
-      auto task = std::make_shared<writer_task>(plot_id, sn_to_gen, (uint32_t)nonces, writers[driver]->canonical_driver());
-      sn_to_gen += nonces;
-      nonces_to_gen -= nonces;
-      free_spaces[driver] = free_spaces[driver] - (int64_t)nonces * plotter_base::PLOT_SIZE;
-      writers[driver]->push_task(std::move(task));
-      task_allocated = true;
     }
-  }
-  if (nonces_to_gen > 0 && total_nonces >= 16) {
+  };
+  fn_task_allocator(~63ull);
+  fn_task_allocator(~0ull);
+  
+  if (nonces_to_gen > 0) {
     spdlog::error("DISK SPACE NOT ENOUGH!!! nonces to generate: [{} / {}]", total_nonces - nonces_to_gen, total_nonces);
   }
   total_nonces -= nonces_to_gen;
@@ -203,13 +208,14 @@ void plotter::run_plotter() {
       cur_worker_pos++;
       continue;
     }
-    auto& nb = page_block_allocator.allocate(plotter->global_work_size() * plotter_base::PLOT_SIZE);
+    auto work_size = plotter->global_work_size() < 8192 ? plotter->global_work_size() * 2 : plotter->global_work_size();
+    auto& nb = page_block_allocator.allocate(work_size * plotter_base::PLOT_SIZE);
     if (! nb)
       continue;
 
     cur_worker_pos++;
 
-    auto ht = wr_worker->next_hasher_task((int)(plotter->global_work_size()), nb);
+    auto ht = wr_worker->next_hasher_task((int)(work_size), nb);
     if (! ht) {
       page_block_allocator.retain(nb);
       continue;
