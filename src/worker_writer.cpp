@@ -72,7 +72,8 @@ bool writer_worker::perform_write_plot(std::shared_ptr<writer_task>& write_task,
 void writer_worker::run() {
   spdlog::info("thread writer worker [{}] starting.", driver_);
   auto bench_mode = ctx_.bench_mode();
-  while (! signal::get().stopped()) {
+  bool success = true;
+  while (success && ! signal::get().stopped()) {
     auto task = fin_hasher_tasks_.pop();
     if (!task)
       continue;
@@ -87,30 +88,41 @@ void writer_worker::run() {
       auto dio = (wr_task->init_nonces & (~7ull)) == wr_task->init_nonces;
       util::timer timer;
       auto& file_path = wr_task->plot_file();
-      if (! util::file::exists(file_path)) {
-        if (osfile_.is_open())
-          osfile_.close();
-        spdlog::debug("nonces={}, open file `{}`, dio mode {}.", wr_task->init_nonces, wr_task->plot_file(), dio);
-        osfile_.open(file_path, true, dio);
-        osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
-      } else {
-        if (! osfile_.is_open()) {
+      do {
+        if (! util::file::exists(file_path)) {
+          if (osfile_.is_open())
+            osfile_.close();
           spdlog::debug("nonces={}, open file `{}`, dio mode {}.", wr_task->init_nonces, wr_task->plot_file(), dio);
-          osfile_.open(file_path, false, dio);
+          osfile_.open(file_path, true, dio);
           osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
         } else {
-          if (osfile_.filename() != file_path) {
-            osfile_.close();
+          if (! osfile_.is_open()) {
             spdlog::debug("nonces={}, open file `{}`, dio mode {}.", wr_task->init_nonces, wr_task->plot_file(), dio);
             osfile_.open(file_path, false, dio);
             osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
+          } else {
+            if (osfile_.filename() != file_path) {
+              osfile_.close();
+              spdlog::debug("nonces={}, open file `{}`, dio mode {}.", wr_task->init_nonces, wr_task->plot_file(), dio);
+              osfile_.open(file_path, false, dio);
+              osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
+            }
           }
         }
-      }
-      perform_write_plot(wr_task, task);
-      task->mbps = int(task->nonces * 1000ull * plotter_base::PLOT_SIZE / 1024 / 1024 / timer.elapsed());
+        success = perform_write_plot(wr_task, task);
+        if (!success) {
+          spdlog::error("writer worker [{}] osfile error with code [{}].", driver_, osfile_.last_error());
+          osfile_.close();
+          std::this_thread::sleep_for(std::chrono::seconds(5));
+        }
+      } while (!success && ! signal::get().stopped());
+      if (!success)
+        task->mbps = 0;
+      else
+        task->mbps = int(task->nonces * 1000ull * plotter_base::PLOT_SIZE / 1024 / 1024 / timer.elapsed());
     }
-    spdlog::debug("write nonce [{}][{}, {}) ({}) to `{}`"
+    spdlog::debug("write nonce [{}] [{}][{}, {}) ({}) to `{}`"
+                  , success
                   , task->current_write_task
                   , task->sn
                   , task->sn+task->nonces
@@ -120,5 +132,8 @@ void writer_worker::run() {
   }
   spdlog::info("waiting for file released...");
   osfile_.close();
-  spdlog::error("thread writer worker [{}] stopped.", driver_);
+  if (!success)
+    spdlog::error("thread writer worker [{}] stopped with error.", driver_);
+  else
+    spdlog::error("thread writer worker [{}] stopped.", driver_);
 }

@@ -56,19 +56,19 @@ struct gpu_plotter : public plotter_base {
     dev_buff_.emplace_back(context_, global_work_size_ * PLOT_SIZE);
     kernel_ = compute::kernel{program_, name};
 
-    *((uint64_t*)(seed_.data() + PLOT_SIZE + 0))  = *((uint64_t*)(plot_id.data() + 0));
-    *((uint64_t*)(seed_.data() + PLOT_SIZE + 8))  = *((uint64_t*)(plot_id.data() + 8));
-    *((uint32_t*)(seed_.data() + PLOT_SIZE + 16)) = *((uint32_t*)(plot_id.data() + 16));
-    *((uint32_t*)(seed_.data() + PLOT_SIZE + 20)) = *((uint32_t*)(SEED_MAGIC));
+    *((uint64_t*)(seed_.data() + 0))  = *((uint64_t*)(plot_id.data() + 0));
+    *((uint64_t*)(seed_.data() + 8))  = *((uint64_t*)(plot_id.data() + 8));
+    *((uint32_t*)(seed_.data() + 16)) = *((uint32_t*)(plot_id.data() + 16));
+    *((uint32_t*)(seed_.data() + 20)) = *((uint32_t*)(SEED_MAGIC));
     return true;
   }
 
   void plot(uint64_t start_nonce, size_t nonces, uint8_t* host_buff) {
     nonces = std::min(nonces, global_work_size_);
     kernel_.set_arg(0, dev_buff_[0]);
-    kernel_.set_arg(1, *((uint64_t*)(seed_.data() + PLOT_SIZE + 0)));
-    kernel_.set_arg(2, *((uint64_t*)(seed_.data() + PLOT_SIZE + 8)));
-    kernel_.set_arg(3, *((uint64_t*)(seed_.data() + PLOT_SIZE + 16)));
+    kernel_.set_arg(1, *((uint64_t*)(seed_.data() + 0)));
+    kernel_.set_arg(2, *((uint64_t*)(seed_.data() + 8)));
+    kernel_.set_arg(3, *((uint64_t*)(seed_.data() + 16)));
     kernel_.set_arg(4, start_nonce);
     kernel_.set_arg(5, nonces);
 
