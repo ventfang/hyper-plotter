@@ -50,12 +50,13 @@ int main(int argc, char* argv[]) {
   parser.add_option("-t", "--test").action("count").help("test mode, default: %default");
   parser.add_option("-i", "--id").action("store").type("uint64_t").set_default(0).help("plot id, default: %default");
   parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(0).help("start nonce, default: %default");
-  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(10000).help("number of nonces, default: %default");
-  parser.add_option("-w", "--weight").action("store").type("double").set_default(1).help("plot file weight, default: %default (GB)");
+  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(-1).help("number of nonces, default: %default");
+  parser.add_option("-w", "--weight").action("store").type("double").set_default(1024).help("plot file weight, default: %default (GB)");
   parser.add_option("-m", "--mem").action("store").type("double").set_default(0).help("memory to use, default: %default (GB)");
   parser.add_option("-p", "--plot").action("count").help("run plots generation, default: %default");
   parser.add_option("-d", "--diskbench").action("count").help("run disk bench, default: %default");
-
+  
+  parser.add_option("--buffers").action("store").type("uint32_t").set_default(0).help("buffers, default:auto");
   parser.add_option("--step").action("store").type("uint32_t").set_default(8192).help("hash calc batch, default: %default");
   parser.add_option("--gws").action("store").type("uint32_t").set_default(0).help("global work size, default: %default");
   parser.add_option("--lws").action("store").type("uint32_t").set_default(0).help("local work size, default: %default");
@@ -145,7 +146,7 @@ int main(int argc, char* argv[]) {
     #endif
 
     spdlog::set_level(spdlog::level::from_str((string)options.get("level")));
-    spdlog::set_pattern("[%H:%M:%S.%f][%t] %^%v%$");
+    spdlog::set_pattern("[%H:%M:%S.%f][%L][%t] %^%v%$");
 
     plotter(options).run();
     spdlog::info("Done!!!");

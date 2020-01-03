@@ -79,7 +79,7 @@ void plotter::run_plotter() {
   spdlog::warn("plot id:              {}", plot_id);
   spdlog::warn("start nonce:          {}", start_nonce);
   auto total_size_gb = total_nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
-  spdlog::warn("total nonces:         {} ({} GB)", total_nonces, size_t(total_size_gb*100)/100.);
+  spdlog::warn("total nonces:         {} ({} GB)", total_nonces, size_t(total_size_gb*1000)/1000.);
   spdlog::warn("total plot files:     {} in {}", total_files, patharg);
   spdlog::warn("plot file nonces:     {} ({} GB)", max_nonces_per_file, max_weight_per_file / 1024 / 1024 / 1024);
 
@@ -120,7 +120,7 @@ void plotter::run_plotter() {
   fn_task_allocator(~63ull);
   fn_task_allocator(~0ull);
   
-  if (nonces_to_gen > 0) {
+  if (total_nonces != uint64_t(-1) && nonces_to_gen > 0) {
     spdlog::error("DISK SPACE NOT ENOUGH!!! nonces to generate: [{} / {}]", total_nonces - nonces_to_gen, total_nonces);
   }
   total_nonces -= nonces_to_gen;
@@ -138,19 +138,27 @@ void plotter::run_plotter() {
   auto hashing = std::make_shared<hasher_worker>(*this, plotter);
   workers_.push_back(hashing);
 
-  auto max_flying_tasks = max_mem_to_use / plotter->global_work_size() / plotter_base::PLOT_SIZE;
+  auto buffer_size =  std::stol(args_["buffers"]) & 7;
+  if (!buffer_size) {
+    buffer_size = (plotter->global_work_size() >= 8192) ? 1 : 2;
+  }
+  auto work_size = plotter->global_work_size() * buffer_size;
+  auto max_flying_tasks = max_mem_to_use / work_size / plotter_base::PLOT_SIZE;
   max_flying_tasks = std::min(max_flying_tasks, workers_.size() * 2);
-  spdlog::warn("max mem to use:       {} GB", max_mem_to_use / 1024 / 1024 / 1024);
+  spdlog::warn("work size:            {} Bytes", work_size);
+  spdlog::warn("max mem to use:       {} GB", int64_t((max_mem_to_use / 1024. / 1024 / 1024) * 10) / 10.);
   spdlog::warn("max flying tasks:     {} tasks", max_flying_tasks);
+  if (max_flying_tasks == 0) {
+    spdlog::error("No Memory to Allocate jobs.");
+    return;
+  }
   for (auto& w : workers_) {
     spdlog::warn("* {}", w->info(true));
   }
-  spdlog::error("* Plotting {} - [{}, {}) ...", plot_id, start_nonce, start_nonce+total_nonces);
-
-  std::cout << "Confirm and Continue [y/N]: ";
-  auto yn = std::getc(stdin);
-  if (yn != 'Y' && yn != 'y')
-    return;
+  spdlog::warn("* Plotting {} - [{}, {}), total {} nonces ({} TB)..."
+              , plot_id, start_nonce, start_nonce+total_nonces
+              , total_nonces
+              , int64_t(total_nonces * 256 * 1000 / 1024. / 1024 / 1024) / 1000.);
 
   std::vector<std::thread> pools;
   for (auto& worker : workers_) {
@@ -164,7 +172,7 @@ void plotter::run_plotter() {
   int finished_nonces{0};
   int dispatched_count{0};
   int finished_count{0};
-  int total_count{(int)std::ceil(total_nonces * 1. / plotter->global_work_size())};
+  int total_count{(int)std::ceil(total_nonces * 1. / work_size)};
   int on_going_task = 0;
   int64_t vnpm{0}, vmbps{0};
   while (! signal::get().stopped()) {
@@ -175,7 +183,8 @@ void plotter::run_plotter() {
       ++finished_count;
       --on_going_task;
       vnpm = !!vnpm ? (vnpm * (workers_.size() - 1) + report->npm) / workers_.size() : report->npm;
-      vmbps = !!vmbps ? (vmbps * (workers_.size() - 1) + report->mbps) / workers_.size() : report->mbps;
+      if (report->mbps)
+        vmbps = !!vmbps ? (vmbps * (workers_.size() - 1) + report->mbps) / workers_.size() : report->mbps;
       spdlog::warn("[{}%] PLOTTING at {}|{} nonces/min, {} MB/s, finished: {}/{} GB, time elapsed {} mins."
                 , int64_t(finished_nonces * 10000. / total_nonces) / 100.
                 , finished_nonces * 60ull * 1000 / plot_timer.elapsed()
@@ -198,18 +207,17 @@ void plotter::run_plotter() {
     if (on_going_task >= max_flying_tasks)
         continue;
 
-    if (hashing->task_queue_size() > 2llu)
+    if (hashing->task_queue_size() > 1llu)
       continue;
 
     if (cur_worker_pos >= max_worker_pos)
       cur_worker_pos = 0;
 
     auto wr_worker = std::dynamic_pointer_cast<writer_worker>(workers_[cur_worker_pos]);
-    if (wr_worker->task_queue_size() > 1llu) {
+    if (wr_worker->task_queue_size() > 0llu) {
       cur_worker_pos++;
       continue;
     }
-    auto work_size = plotter->global_work_size() < 8192 ? plotter->global_work_size() * 2 : plotter->global_work_size();
     auto& nb = page_block_allocator.allocate(work_size * plotter_base::PLOT_SIZE);
     if (! nb)
       continue;
