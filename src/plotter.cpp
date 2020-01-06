@@ -1,4 +1,5 @@
 #include <unordered_map>
+#include <boost/filesystem.hpp>
 #include "plotter.h"
 #include "kernel.h"
 
@@ -11,6 +12,8 @@ void plotter::run() {
     run_test();
   } else if ((int)args_.get("diskbench")) {
     run_disk_bench();
+  } else if ((int)args_.get("verify")) {
+    run_plot_verify();
   }
 }
 
@@ -355,6 +358,75 @@ void plotter::run_disk_bench() {
     , bytes, bytes - total_bytes, timer.elapsed() / 1000, bytes * 1000 / 1024 / 1024 / timer.elapsed());
   osfile.close();
   spdlog::warn("finished.");
+}
+
+void plotter::run_plot_verify() {
+  auto argvs = util::split(args_["drivers"], ", ");
+  if (argvs.size() < 1) {
+    spdlog::error("error args: prog.exe --verify plot_filename");
+    return;
+  }
+  boost::filesystem::path full(argvs[0]);
+  plot_id_t plot_id;
+  int64_t start_nonce{0};
+  int64_t totla_nonces{0};
+  int32_t step = std::stoull(args_["step"]);
+  bool valid = boost::filesystem::exists(full);
+  if (valid) {
+    auto parts = util::split(full.filename().string(), "_");
+    valid = parts.size() == 3;
+    if (valid) {
+      auto plot_id_hex = parts[0];
+      start_nonce = std::stoll(parts[1]);
+      totla_nonces = std::stoll(parts[2]);
+      std::tie(valid, plot_id) = plotter_base::to_plot_id_bytes(plot_id_hex);
+    }
+  }
+  if (!valid) {
+    spdlog::info("invalid plot file {}", argvs[0]);
+    return;
+  }
+
+  util::file osfile;
+  if (! osfile.open(argvs[0], false)) {
+    spdlog::error("file `{}` failed open [{}].", argvs[0], osfile.last_error());
+    return;
+  }
+  auto file_size = osfile.size();
+  auto nonces = file_size / 256 / 1024;
+  if (nonces != totla_nonces || (nonces & 7 != nonces) || nonces * 256 * 1024 != file_size) {
+    spdlog::error("file `{}` plot file invalide.", argvs[0]);
+    return;
+  }
+  
+  cpu_plotter cplot;
+  uint8_t buffer[64];
+  bool ret;
+  // TODO: faster check
+  for (int i = 0; i < nonces; i += step) {
+    int n = start_nonce + (nonces - i - 1);
+    cplot.plot(plot_id, n);
+    auto data = cplot.data();
+    for (auto scoop = 0; scoop < 4096; ++scoop) {
+      ret  = !osfile.seek((nonces - i - 1 + scoop * nonces) * 64);
+      ret |= !osfile.read(buffer, 64);
+      if (ret) {
+        spdlog::error("file `{}` read failed.", argvs[0]);
+        return;
+      }
+      if (memcmp(data+scoop*64, buffer, 64) != 0) {
+        spdlog::error("file `{}` error at nonce: {}, scoop: {}.", argvs[0], n, scoop);
+        spdlog::info("scoop  {}: {}", scoop, plotter_base::btoh(data + scoop * 64, 64));
+        spdlog::info("expect {}: {}", scoop, plotter_base::btoh(buffer, 64));
+        return;
+      }
+    }
+    if ((i & 127) == 0) {
+      spdlog::info("Verified {}%.", (i + 1) * 10000 / nonces / 100.);
+    }
+  }
+  spdlog::info("Verified, GOOD!");
+  osfile.close();
 }
 
 void plotter::report(std::shared_ptr<hasher_task>&& task) { reporter_.push(std::move(task)); }

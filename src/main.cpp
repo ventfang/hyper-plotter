@@ -57,6 +57,7 @@ int main(int argc, char* argv[]) {
   parser.add_option("-m", "--mem").action("store").type("double").set_default(0).help("memory to use, default: %default (GB)");
   parser.add_option("-p", "--plot").action("count").help("run plots generation, default: %default");
   parser.add_option("-d", "--diskbench").action("count").help("run disk bench, default: %default");
+  parser.add_option("--verify").action("count").help("plot file validation, default: %default");
   
   parser.add_option("--buffers").action("store").type("uint32_t").set_default(0).help("buffers, default:auto");
   parser.add_option("--step").action("store").type("uint32_t").set_default(8192).help("hash calc batch, default: %default");

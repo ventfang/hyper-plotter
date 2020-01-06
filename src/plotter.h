@@ -47,6 +47,8 @@ private:
 
   void run_disk_bench();
 
+  void run_plot_verify();
+
 private:
   optparse::Values& args_;
   std::vector<std::shared_ptr<worker>> workers_;
