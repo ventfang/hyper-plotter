@@ -32,7 +32,8 @@ using namespace std;
 
 const string usage = "usage: %prog [OPTION]... [DIRECTORY]...";
 
-const string version = "%prog " PARALLEL_PLOTTER_VER " " GIT_BRANCH "-" GIT_COMMIT_HASH "\n"
+const string version = "%prog " PARALLEL_PLOTTER_VER " " GIT_BRANCH "-" GIT_COMMIT_HASH
+  " (build: " __DATE__ " " __TIME__ ").\n"
   "Copyright (C) 2019-2020 The FreeStyle developers\n"
   "Distributed under the MIT software license, see the accompanying\n"
   "file COPYING or http://www.opensource.org/licenses/mit-license.php.\n";
@@ -74,7 +75,14 @@ int main(int argc, char* argv[]) {
                                   return  std::move(a) + " " + b;
                                 });
     auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
-    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("parallel-plotter.log");
+    stringstream ssf;
+    auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    auto tm = *std::localtime(&t);
+    ssf << "parallel-plotter-" 
+        << tm.tm_year + 1900 << std::setfill('0')
+        << std::setw(2) << tm.tm_mon + 1
+        << std::setw(2) << tm.tm_mday << ".log";
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(ssf.str());
     auto sinks = spdlog::sinks_init_list{ console_sink, file_sink };
     auto default_logger = std::make_shared<spdlog::logger>("logger", sinks);
     spdlog::set_default_logger(default_logger);   
@@ -146,7 +154,7 @@ int main(int argc, char* argv[]) {
     #endif
 
     spdlog::set_level(spdlog::level::from_str((string)options.get("level")));
-    spdlog::set_pattern("[%H:%M:%S.%f][%L][%t] %^%v%$");
+    spdlog::set_pattern("[%D %T.%f][%L][%t] %^%v%$");
 
     plotter(options).run();
     spdlog::info("Done!!!");
