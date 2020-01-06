@@ -1,5 +1,5 @@
 
-file(GLOB PP_SOURCES "*.cpp")
+file(GLOB_RECURSE PP_SOURCES "*.cpp")
 file(GLOB OP_SOURCES "${PROJECT_SOURCE_DIR}/contrib/cpp-optparse/OptionParser.cpp")
 
 set(EXEC_NAME "parallel-plotter")

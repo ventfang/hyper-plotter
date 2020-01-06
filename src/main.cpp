@@ -15,6 +15,7 @@ namespace compute = boost::compute;
 #include "config.h"
 #include "plotter.h"
 #include "common/utils.h"
+#include "common/base58.h"
 
 namespace opt = optparse;
 using namespace std;
@@ -61,6 +62,8 @@ int main(int argc, char* argv[]) {
   parser.add_option("--gws").action("store").type("uint32_t").set_default(0).help("global work size, default: %default");
   parser.add_option("--lws").action("store").type("uint32_t").set_default(0).help("local work size, default: %default");
 
+  parser.add_option("--from_addr").action("store").type("string").set_default("").help("address to hash160 key id, default: %default");
+
   char const* const slevels[] = { "trace", "debug", "info", "warning", "error", "critical", "off" };
   parser.add_option("-l", "--level").choices(&slevels[0], &slevels[7]).action("store").type("string").set_default("info").help("log level, default: %default");
   char const* const benchmode[] = { "disabled", "debug", "info", "warning", "error", "critical", "off" };
@@ -68,6 +71,18 @@ int main(int argc, char* argv[]) {
 
   try {
     opt::Values& options = parser.parse_args(argc, argv);
+    if (!options["from_addr"].empty()) {
+      std::vector<unsigned char> vch;
+      if (DecodeBase58(options["from_addr"], vch) && vch.size() > 5) {
+        std::vector<unsigned char> hash;
+        hash.insert(hash.end(), vch.rbegin() + 4, vch.rend() - 1);
+        std::cout << plotter_base::btoh(hash.data(), hash.size()) << std::endl;
+      }
+      else {
+        std::cout << "Invalid!";
+      }
+      return 0;
+    }
     vector<string> dirs = parser.args();
     options["argv"] = accumulate(argv, argv+argc, string{"cmdline:"},
                                 [](string a, const string b) -> decltype(auto) {
