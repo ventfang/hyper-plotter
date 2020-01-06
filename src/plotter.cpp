@@ -37,8 +37,8 @@ void plotter::run_test() {
   util::timer timer1;
   cpu_plotter cplot;
   cplot.plot(plot_id, start_nonce);
-  auto&& chash = cplot.to_string();
-  spdlog::info("cpu plot hash: 0x{}", chash.substr(0, 64));
+  auto&& chash = cplot.to_string(64);
+  spdlog::info("cpu plot hash: 0x{}", chash);
   spdlog::info("cpu plot time cost: {} ms.", timer1.elapsed());
 
   spdlog::info("do test gpu plot: {}_{}_{}_{}", plotter_base::SEED_MAGIC, plot_id_hex, start_nonce, nonces);
@@ -61,7 +61,7 @@ void plotter::run_test() {
   spdlog::info("gpu plot time cost: {} ms.", timer2.elapsed());
   uint8_t hash[64];
   transposition((uint8_t*)buff.data(), hash, 0, 0, 1);
-  auto ghash = gplot.to_string(hash, 32);
+  auto ghash = gplot.to_string(hash, 64);
   spdlog::info("gpu plot hash: 0x{}", ghash);
 }
 
