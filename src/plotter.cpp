@@ -399,12 +399,13 @@ void plotter::run_plot_verify() {
   util::timer timer;
   bool ret;
   // TODO: verify_worker thread
-  for (int i = 0; i < nonces; i += gplot.global_work_size() + step) {
-    int sn = start_nonce + i;
-    int n = std::min(nonces - i, gplot.global_work_size());
+  for (int64_t i = 0; i < nonces; i += gplot.global_work_size() + step) {
+    int64_t off = std::max(0ll, int64_t(nonces - i - gplot.global_work_size()));
+    int64_t sn = start_nonce + off;
+    int64_t n = std::min(nonces - i, gplot.global_work_size());
     gplot.plot(plot_id, sn, n, hasher_buffer);
     for (auto scoop = 0; scoop < 4096; ++scoop) {
-      ret  = !osfile.seek((i + scoop * nonces) * 64);
+      ret  = !osfile.seek((off + scoop * nonces) * 64);
       ret |= !osfile.read(file_cache, 64 * n);
       if (ret) {
         spdlog::error("file `{}` read failed.", argvs[0]);
@@ -412,13 +413,13 @@ void plotter::run_plot_verify() {
       }
       transposition(hasher_buffer, hasher_cache, scoop, 0, n);
       if (memcmp(hasher_cache, file_cache, n * 64) != 0) {
-        spdlog::error("file `{}` error at nonce: [{}, {}), scoop: {}.", argvs[0], sn, sn + n, scoop);
+        spdlog::error("file `{}` error at nonce: [{}, {}), scoop: {}.", argvs[0], sn, n, scoop);
         spdlog::info("expect: {}", plotter_base::btoh(hasher_cache, 64));
         spdlog::info("stored: {}", plotter_base::btoh(file_cache, 64));
         return;
       }
     }
-    spdlog::info("Verified {}%, speed {} nonces/secs.", (i + 1) * 10000 / nonces / 100., (i + 1) * 10000 / timer.elapsed() / 10.);
+    spdlog::info("Verified {}%, speed {} nonces/secs.", (i + n) * 10000 / nonces / 100., (i + n) * 10000 / timer.elapsed() / 10.);
   }
   spdlog::info("Verified {}%, GOOD! speed {} nonces/secs.", 100, nonces * 10000 / timer.elapsed() / 10.);
   osfile.close();
