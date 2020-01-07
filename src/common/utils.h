@@ -20,13 +20,13 @@ static size_t sys_free_disk_bytes(std::string path) {
   ULARGE_INTEGER lpFreeBytesAvailableToCaller;
   ULARGE_INTEGER lpTotalNumberOfBytes;
   ULARGE_INTEGER lpTotalNumberOfFreeBytes;
-	if (!::GetDiskFreeSpaceExA(path.c_str()
+  if (!::GetDiskFreeSpaceExA(path.c_str()
                       , &lpFreeBytesAvailableToCaller
                       , &lpTotalNumberOfBytes
                       , &lpTotalNumberOfFreeBytes))
     return 0;
 
-	return (size_t)lpFreeBytesAvailableToCaller.QuadPart;
+  return (size_t)lpFreeBytesAvailableToCaller.QuadPart;
 }
 
 static bool acquire_manage_volume_privs() {

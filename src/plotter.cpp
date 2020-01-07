@@ -3,6 +3,7 @@
 #include "plotter.h"
 #include "kernel.h"
 
+namespace bfs = boost::filesystem;
 plotter::plotter(optparse::Values& args) : args_{args} {}
 
 void plotter::run() {
@@ -98,7 +99,7 @@ void plotter::run_plotter() {
     return;
   }
   if (start_nonce == -1) {
-    boost::filesystem::path drv(drivers[0]);
+    bfs::path drv(drivers[0]);
     auto sn = util::get_volume_sn(drv.root_path().string());
     if (sn == -1) {
       spdlog::error("Can't auto detect start nonce, use -n to set start nonce.");
@@ -124,31 +125,45 @@ void plotter::run_plotter() {
   auto sn_to_gen = start_nonce;
   auto nonces_to_gen = total_nonces;
   auto fn_task_allocator = [&](uint64_t nonces_align) {
-    auto task_allocated = true;
-    for (; nonces_to_gen > 0 && task_allocated;) {
-      task_allocated = false;
-      for (auto& driver : drivers) {
-        if (! writers[driver]) {
-          auto canonical = driver;
-          if (canonical[canonical.size() - 1] != '\\' && canonical[canonical.size() - 1] != '/')
-            canonical += "\\";
-          // TODO: check disk root
-          free_spaces[driver] = util::sys_free_disk_bytes(driver);
-          auto worker = std::make_shared<writer_worker>(*this, canonical);
-          writers[driver] = worker;
-          workers_.push_back(std::move(worker));
+    for (auto& driver : drivers) {
+      if (! writers[driver]) {
+        auto canonical = driver;
+        if (canonical[canonical.size() - 1] != '\\' && canonical[canonical.size() - 1] != '/')
+          canonical += "\\";
+        // TODO: check disk root
+        free_spaces[driver] = util::sys_free_disk_bytes(driver);
+        auto worker = std::make_shared<writer_worker>(*this, canonical);
+        writers[driver] = worker;
+        workers_.push_back(std::move(worker));
+        
+        bfs::directory_iterator end;
+        bfs::directory_iterator walk(driver);
+        uint64_t last_sn{0};
+        for (; walk != end; walk++) {
+          if (bfs::is_directory(*walk))
+            continue;
+          auto parts = util::split(walk->path().filename().string(), "_");
+          if (parts.size() != 3 || parts[0] != plot_id_hex)
+            continue;
+          auto sn = std::stoull(parts[1]);
+          if ((sn & 0xffffffff00000000ull) == (start_nonce & 0xffffffff00000000ull)) {
+            sn += std::stoll(parts[2]);
+            last_sn = std::max(last_sn, sn);
+          }
         }
+        sn_to_gen = std::max(sn_to_gen, last_sn);
+      }
+      while (nonces_to_gen > 0) {
         const auto driver_max_nonces = free_spaces[driver] / plotter_base::PLOT_SIZE;
         auto plot_nonces = (size_t)std::max(0ll, std::min((int64_t)max_nonces_per_file, driver_max_nonces));
         auto nonces = std::min(nonces_to_gen, plot_nonces) & nonces_align;
         if (nonces == 0 || nonces >= INT32_MAX) // max 511T
-          continue;
+          break;
         auto task = std::make_shared<writer_task>(plot_id_hex, sn_to_gen, (uint32_t)nonces, writers[driver]->canonical_driver());
         sn_to_gen += nonces;
         nonces_to_gen -= nonces;
         free_spaces[driver] = free_spaces[driver] - (int64_t)nonces * plotter_base::PLOT_SIZE;
         writers[driver]->push_task(std::move(task));
-        task_allocated = true;
       }
     }
   };
@@ -382,12 +397,12 @@ void plotter::run_plot_verify() {
     spdlog::error("error args: prog.exe --verify plot_filename");
     return;
   }
-  boost::filesystem::path full(argvs[0]);
+  bfs::path full(argvs[0]);
   plot_id_t plot_id;
   int64_t start_nonce{0};
   int64_t totla_nonces{0};
   int32_t step = std::stoull(args_["step"]);
-  bool valid = boost::filesystem::exists(full);
+  bool valid = bfs::exists(full);
   if (valid) {
     auto parts = util::split(full.filename().string(), "_");
     valid = parts.size() == 3;
