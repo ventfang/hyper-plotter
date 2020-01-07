@@ -335,8 +335,8 @@ void plotter::run_disk_bench() {
     if ((bytes_written & ~0x7ffffff) == bytes_written)
       spdlog::info("bytes_written: {}, speed: {} MB/s, time elapsed: {} secs"
         , bytes_written
-        , (bytes_written * 1000 / 1024 / 1024 / timer.elapsed()),
-        timer.elapsed() / 1000);
+        , (bytes_written * 1000 / 1024 / 1024 / timer.elapsed())
+        , timer.elapsed() / 1000);
   }
   spdlog::warn("total_bytes: {}, written: {}, time elapsed: {} secs, speed: {} MB/s."
     , bytes, bytes - total_bytes, timer.elapsed() / 1000, bytes * 1000 / 1024 / 1024 / timer.elapsed());
@@ -382,34 +382,49 @@ void plotter::run_plot_verify() {
     return;
   }
   
-  cpu_plotter cplot;
-  uint8_t buffer[64];
+  auto plot_args = gpu_plotter::args_t{std::stoull(args_["lws"])
+                                      ,std::stoull(args_["gws"])
+                                      ,(int32_t)std::stoull(args_["step"])
+                                      };
+  gpu_plotter gplot(compute::system::default_device(), plot_args);
+  auto res = gplot.init(KERNEL_PROG, "plotting");
+  if (!res) {
+    spdlog::error("init gpu plotter failed. kernel build log: {}", gplot.program().build_log());
+    return;
+  }
+  
+  auto hasher_buffer = new uint8_t[gpu_plotter::PLOT_SIZE * gplot.global_work_size()];
+  auto file_cache = new uint8_t[64 * gplot.global_work_size()];
+  auto hasher_cache = new uint8_t[64 * gplot.global_work_size()];
+  util::timer timer;
   bool ret;
-  // TODO: faster check
-  for (int i = 0; i < nonces; i += step) {
-    int n = start_nonce + (nonces - i - 1);
-    cplot.plot(plot_id, n);
-    auto data = cplot.data();
+  // TODO: verify_worker thread
+  for (int i = 0; i < nonces; i += gplot.global_work_size() + step) {
+    int sn = start_nonce + i;
+    int n = std::min(nonces - i, gplot.global_work_size());
+    gplot.plot(plot_id, sn, n, hasher_buffer);
     for (auto scoop = 0; scoop < 4096; ++scoop) {
-      ret  = !osfile.seek((nonces - i - 1 + scoop * nonces) * 64);
-      ret |= !osfile.read(buffer, 64);
+      ret  = !osfile.seek((i + scoop * nonces) * 64);
+      ret |= !osfile.read(file_cache, 64 * n);
       if (ret) {
         spdlog::error("file `{}` read failed.", argvs[0]);
         return;
       }
-      if (memcmp(data+scoop*64, buffer, 64) != 0) {
-        spdlog::error("file `{}` error at nonce: {}, scoop: {}.", argvs[0], n, scoop);
-        spdlog::info("scoop  {}: {}", scoop, plotter_base::btoh(data + scoop * 64, 64));
-        spdlog::info("expect {}: {}", scoop, plotter_base::btoh(buffer, 64));
+      transposition(hasher_buffer, hasher_cache, scoop, 0, n);
+      if (memcmp(hasher_cache, file_cache, n * 64) != 0) {
+        spdlog::error("file `{}` error at nonce: [{}, {}), scoop: {}.", argvs[0], sn, sn + n, scoop);
+        spdlog::info("expect: {}", plotter_base::btoh(hasher_cache, 64));
+        spdlog::info("stored: {}", plotter_base::btoh(file_cache, 64));
         return;
       }
     }
-    if ((i & 127) == 0) {
-      spdlog::info("Verified {}%.", (i + 1) * 10000 / nonces / 100.);
-    }
+    spdlog::info("Verified {}%, speed {} nonces/secs.", (i + 1) * 10000 / nonces / 100., (i + 1) * 10000 / timer.elapsed() / 10.);
   }
-  spdlog::info("Verified, GOOD!");
+  spdlog::info("Verified {}%, GOOD! speed {} nonces/secs.", 100, nonces * 10000 / timer.elapsed() / 10.);
   osfile.close();
+  delete[] hasher_buffer;
+  delete[] file_cache;
+  delete[] hasher_cache;
 }
 
 void plotter::report(std::shared_ptr<hasher_task>&& task) { reporter_.push(std::move(task)); }
