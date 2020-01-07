@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <regex>
 
 namespace util {
 
@@ -50,5 +51,18 @@ static bool acquire_manage_volume_privs() {
 }
 #else
 #endif
+
+static std::vector<std::string> split(const std::string& src, const std::string& delim) {
+  if (src.empty())
+    return {};
+
+  std::regex re{delim};
+  auto res = std::vector<std::string> {
+    std::sregex_token_iterator(src.begin(), src.end(), re, -1),
+    std::sregex_token_iterator()
+  };
+
+  return res;
+}
 
 }

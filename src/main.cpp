@@ -56,6 +56,7 @@ int main(int argc, char* argv[]) {
   parser.add_option("-m", "--mem").action("store").type("double").set_default(0).help("memory to use, default: %default (GB)");
   parser.add_option("-p", "--plot").action("count").help("run plots generation, default: %default");
   parser.add_option("-d", "--diskbench").action("count").help("run disk bench, default: %default");
+  parser.add_option("--verify").action("count").help("plot file validation, default: %default");
   
   parser.add_option("--buffers").action("store").type("uint32_t").set_default(0).help("buffers, default:auto");
   parser.add_option("--step").action("store").type("uint32_t").set_default(8192).help("hash calc batch, default: %default");
@@ -81,7 +82,10 @@ int main(int argc, char* argv[]) {
     ssf << "parallel-plotter-" 
         << tm.tm_year + 1900 << std::setfill('0')
         << std::setw(2) << tm.tm_mon + 1
-        << std::setw(2) << tm.tm_mday << ".log";
+        << std::setw(2) << tm.tm_mday
+        << std::setw(2) << tm.tm_hour
+        << std::setw(2) << tm.tm_min
+        << std::setw(2) << tm.tm_sec << ".log";
     auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(ssf.str());
     auto sinks = spdlog::sinks_init_list{ console_sink, file_sink };
     auto default_logger = std::make_shared<spdlog::logger>("logger", sinks);
