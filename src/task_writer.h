@@ -30,7 +30,13 @@ struct writer_task {
 
   std::string plot_file() { return pf_; }
 
+  bool submit_nonces(int64_t nonces) {
+    submitted_nonces_ += nonces;
+    return submitted_nonces_ == init_nonces;
+  }
+
 private:
   uint64_t prev_{0};
+  int64_t  submitted_nonces_{0};
   std::string pf_;
 };

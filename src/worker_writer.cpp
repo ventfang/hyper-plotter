@@ -23,6 +23,8 @@
             + (word) * NONCES_VECTOR \
             + ((nonce) & NONCES_VECTOR_MASK)
 
+static constexpr auto PLOTTING_FILE_EXT = ".plotting";
+
 void transposition(uint8_t* data, uint8_t* write_buff, int cur_scoop, int nstart, int nsize) {
   uint32_t* src = (uint32_t*)data;
   uint32_t* des = (uint32_t*)write_buff;
@@ -73,6 +75,7 @@ void writer_worker::run() {
   spdlog::info("thread writer worker [{}] starting.", driver_);
   auto bench_mode = ctx_.bench_mode();
   bool success = true;
+  int last_write_task = -1;
   while (success && ! signal::get().stopped()) {
     auto task = fin_hasher_tasks_.pop();
     if (!task)
@@ -87,33 +90,31 @@ void writer_worker::run() {
     if ((bench_mode & 0x01) == 0) {
       auto dio = (wr_task->init_nonces & (~7ull)) == wr_task->init_nonces;
       util::timer timer;
-      auto& file_path = wr_task->plot_file();
+      auto plotting_file = wr_task->plot_file() + PLOTTING_FILE_EXT;
+      if (last_write_task != task->current_write_task) {
+        last_write_task = task->current_write_task;
+        osfile_.close(); // FIXME: out of order task
+      }
       do {
-        if (! util::file::exists(file_path)) {
-          if (osfile_.is_open())
-            osfile_.close();
-          spdlog::debug("nonces={}, open file `{}`, dio mode {}.", wr_task->init_nonces, wr_task->plot_file(), dio);
-          osfile_.open(file_path, true, dio);
+        if (! osfile_.is_open()) {
+          auto do_create = ! util::file::exists(plotting_file);
+          spdlog::debug("nonces={}, open file `{}`, dio mode {} create new {}."
+                      , wr_task->init_nonces, wr_task->plot_file(), dio, do_create);
+          osfile_.open(plotting_file, do_create, dio);
           osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
-        } else {
-          if (! osfile_.is_open()) {
-            spdlog::debug("nonces={}, open file `{}`, dio mode {}.", wr_task->init_nonces, wr_task->plot_file(), dio);
-            osfile_.open(file_path, false, dio);
-            osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
-          } else {
-            if (osfile_.filename() != file_path) {
-              osfile_.close();
-              spdlog::debug("nonces={}, open file `{}`, dio mode {}.", wr_task->init_nonces, wr_task->plot_file(), dio);
-              osfile_.open(file_path, false, dio);
-              osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
-            }
-          }
         }
         success = perform_write_plot(wr_task, task);
         if (!success) {
           spdlog::error("writer worker [{}] osfile error with code [{}].", driver_, osfile_.last_error());
           osfile_.close();
           std::this_thread::sleep_for(std::chrono::seconds(5));
+        } else {
+          if (wr_task->submit_nonces(task->nonces)) {
+            osfile_.close();
+            auto& filename = osfile_.filename();
+            // TODO: failed rename
+            util::file::rename(plotting_file, wr_task->plot_file());
+          }
         }
       } while (!success && ! signal::get().stopped());
       if (!success)
