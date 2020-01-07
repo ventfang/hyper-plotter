@@ -15,6 +15,11 @@ public:
     return (INVALID_FILE_ATTRIBUTES != attr) && ((FILE_ATTRIBUTE_DIRECTORY & attr) == 0);
   }
 
+  static bool rename(const std::string& src, const std::string& dst) {
+    auto ret = ::MoveFileExA(src.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    return ret == TRUE;
+  }
+
 public:
   file() = default;
   ~file() { close(); }

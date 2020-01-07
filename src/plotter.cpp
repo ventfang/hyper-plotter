@@ -142,6 +142,8 @@ void plotter::run_plotter() {
         for (; walk != end; walk++) {
           if (bfs::is_directory(*walk))
             continue;
+          if (walk->path().filename().has_extension())
+            continue;
           auto parts = util::split(walk->path().filename().string(), "_");
           if (parts.size() != 3 || parts[0] != plot_id_hex)
             continue;
@@ -237,7 +239,7 @@ void plotter::run_plotter() {
       vnpm = !!vnpm ? (vnpm * (workers_.size() - 1) + report->npm) / workers_.size() : report->npm;
       if (report->mbps)
         vmbps = !!vmbps ? (vmbps * (workers_.size() - 1) + report->mbps) / workers_.size() : report->mbps;
-      spdlog::warn("[{}%] PLOTTING at {}|{} nonces/min, {} MB/s, finished: {}/{} GB, time elapsed {} mins."
+      spdlog::warn("[{:.2f}%] PLOTTING at {}|{} nonces/min, {} MB/s, finished: {}/{} GB, time elapsed {} mins."
                 , int64_t(finished_nonces * 10000. / total_nonces) / 100.
                 , finished_nonces * 60ull * 1000 / plot_timer.elapsed()
                 , vnpm
@@ -399,7 +401,7 @@ void plotter::run_plot_verify() {
   }
   bfs::path full(argvs[0]);
   plot_id_t plot_id;
-  int64_t start_nonce{0};
+  uint64_t start_nonce{0};
   int64_t totla_nonces{0};
   int32_t step = std::stoull(args_["step"]);
   bool valid = bfs::exists(full);
@@ -408,7 +410,7 @@ void plotter::run_plot_verify() {
     valid = parts.size() == 3;
     if (valid) {
       auto plot_id_hex = parts[0];
-      start_nonce = std::stoll(parts[1]);
+      start_nonce = std::stoull(parts[1]);
       totla_nonces = std::stoll(parts[2]);
       std::tie(valid, plot_id) = plotter_base::to_plot_id_bytes(plot_id_hex);
     }
@@ -449,7 +451,7 @@ void plotter::run_plot_verify() {
   // TODO: verify_worker thread
   for (int64_t i = 0; i < nonces; i += gplot.global_work_size() + step) {
     int64_t off = std::max(0ll, int64_t(nonces - i - gplot.global_work_size()));
-    int64_t sn = start_nonce + off;
+    uint64_t sn = start_nonce + off;
     int64_t n = std::min(nonces - i, gplot.global_work_size());
     gplot.plot(sn, n, hasher_buffer);
     for (auto scoop = 0; scoop < 4096; ++scoop) {
