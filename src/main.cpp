@@ -51,10 +51,10 @@ int main(int argc, char* argv[]) {
   parser.add_option("-V", "--verbose").action("count").help("verbose, default: %default");
   parser.add_option("-t", "--test").action("count").help("test mode, default: %default");
   parser.add_option("-i", "--id").action("store").type("string").set_default("0000000000000000000000000000000000000000").help("plot id, default: %default");
-  parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(0).help("start nonce, default: %default");
-  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(-1).help("number of nonces, default: %default");
+  parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(-1).help("start nonce, default: auto");
+  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(-1).help("number of nonces, default: auto");
   parser.add_option("-w", "--weight").action("store").type("double").set_default(1024).help("plot file weight, default: %default (GB)");
-  parser.add_option("-m", "--mem").action("store").type("double").set_default(0).help("memory to use, default: %default (GB)");
+  parser.add_option("-m", "--mem").action("store").type("int32_t").set_default(0).help("memory to use, default: auto (GB)");
   parser.add_option("-p", "--plot").action("count").help("run plots generation, default: %default");
   parser.add_option("-d", "--diskbench").action("count").help("run disk bench, default: %default");
   parser.add_option("--verify").action("count").help("plot file validation, default: %default");
@@ -73,6 +73,14 @@ int main(int argc, char* argv[]) {
 
   try {
     opt::Values& options = parser.parse_args(argc, argv);
+    if (options["sn"] == "auto")
+      options["sn"] = "-1";
+    if (options["num"] == "auto")
+      options["num"] = "-1";
+    if (options["mem"] == "auto")
+      options["mem"] = "0";
+    if (options["buffers"] == "auto")
+      options["buffers"] = "0";
     if (!options["from_addr"].empty()) {
       std::vector<unsigned char> vch;
       if (DecodeBase58(options["from_addr"], vch) && vch.size() > 5) {
@@ -184,6 +192,5 @@ int main(int argc, char* argv[]) {
   } catch (...) {
     return -1;
   }
-  PAUSE();
   return 0;
 }
