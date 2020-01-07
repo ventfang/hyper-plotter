@@ -49,6 +49,16 @@ static bool acquire_manage_volume_privs() {
 		return false;
   return true;
 }
+
+static uint32_t get_volume_sn(const std::string& driver) {
+  DWORD lpVolumeSerialNumber{0};
+  auto res = GetVolumeInformationA(driver.empty() ? nullptr : driver.c_str()
+                                 , nullptr, 0, &lpVolumeSerialNumber
+                                 , nullptr, nullptr, nullptr, 0);
+  if (res == TRUE)
+    return lpVolumeSerialNumber;
+  return -1;
+}
 #else
 #endif
 

@@ -21,6 +21,10 @@ void plotter::run_test() {
   auto gpu = compute::system::default_device();
   auto plot_id = std::stoull(args_["id"]);
   auto start_nonce = std::stoull(args_["sn"]);
+  if (start_nonce == -1) {
+    start_nonce = util::get_volume_sn("");
+    start_nonce <<= 32;
+  }
   auto nonces = (int32_t)std::stoull(args_["num"]);
 
   spdlog::info("do test cpu plot: {}_{}_{}", plot_id, start_nonce, nonces);
@@ -59,11 +63,11 @@ void plotter::run_test() {
 void plotter::run_plotter() {
   signal::get().install_signal();
   const auto plot_id = std::stoull(args_["id"]);
-  const auto start_nonce = std::stoull(args_["sn"]);
+  auto start_nonce = std::stoull(args_["sn"]);
   auto total_nonces = std::stoull(args_["num"]);
   const auto max_mem_to_use = (args_["mem"] == "0")
                             ? uint64_t(util::sys_free_mem_bytes() * 0.8)
-                            : uint64_t((double)std::stod(args_["mem"]) * 1024) * 1024 * 1024;
+                            : std::stoull(args_["mem"]) * 1024 * 1024 * 1024;
   const auto max_weight_per_file = uint64_t((double)std::stod(args_["weight"]) * 1024) * 1024 * 1024;
   util::block_allocator page_block_allocator{max_mem_to_use};
   
@@ -76,6 +80,16 @@ void plotter::run_plotter() {
   if (patharg.empty() || drivers.empty()) {
     spdlog::warn("No dirver(directory) specified. exit!!!");
     return;
+  }
+  if (start_nonce == -1) {
+    boost::filesystem::path drv(drivers[0]);
+    auto sn = util::get_volume_sn(drv.root_path().string());
+    if (sn == -1) {
+      spdlog::error("Can't auto detect start nonce, use -n to set start nonce.");
+      return;
+    }
+    start_nonce = sn;
+    start_nonce <<= 32;
   }
 
   const auto max_nonces_per_file = (max_weight_per_file / plotter_base::PLOT_SIZE) & ~(63ull);
@@ -123,12 +137,14 @@ void plotter::run_plotter() {
     }
   };
   fn_task_allocator(~63ull);
-  fn_task_allocator(~0ull);
+  fn_task_allocator(~7ull);
   
-  if (total_nonces != uint64_t(-1) && nonces_to_gen > 0) {
+  if (total_nonces == nonces_to_gen || nonces_to_gen > 7) {
     spdlog::error("DISK SPACE NOT ENOUGH!!! nonces to generate: [{} / {}]", total_nonces - nonces_to_gen, total_nonces);
   }
   total_nonces -= nonces_to_gen;
+  if (total_nonces == 0)
+    return;
 
   // init hasher worker
   auto plot_args = gpu_plotter::args_t{std::stoull(args_["lws"])
