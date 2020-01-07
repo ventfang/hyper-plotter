@@ -97,7 +97,10 @@ int main(int argc, char* argv[]) {
     ssf << "parallel-plotter-" 
         << tm.tm_year + 1900 << std::setfill('0')
         << std::setw(2) << tm.tm_mon + 1
-        << std::setw(2) << tm.tm_mday << ".log";
+        << std::setw(2) << tm.tm_mday
+        << std::setw(2) << tm.tm_hour
+        << std::setw(2) << tm.tm_min
+        << std::setw(2) << tm.tm_sec << ".log";
     auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(ssf.str());
     auto sinks = spdlog::sinks_init_list{ console_sink, file_sink };
     auto default_logger = std::make_shared<spdlog::logger>("logger", sinks);

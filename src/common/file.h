@@ -32,7 +32,7 @@ public:
     DWORD access_flag = GENERIC_READ | GENERIC_WRITE | FILE_ATTRIBUTE_NORMAL;
     DWORD create_flag = create ? CREATE_ALWAYS : OPEN_EXISTING;
     DWORD attr_lag = nobuf ? (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH): FILE_ATTRIBUTE_NORMAL|FILE_FLAG_RANDOM_ACCESS;
-    handle_ = ::CreateFileA(filepath.c_str(), access_flag, 0, NULL, create_flag, attr_lag, NULL);
+    handle_ = ::CreateFileA(filepath.c_str(), access_flag, FILE_SHARE_READ, NULL, create_flag, attr_lag, NULL);
     if (INVALID_HANDLE_VALUE == handle_) {
       error_ = ::GetLastError();
       return false;
