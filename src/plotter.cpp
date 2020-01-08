@@ -129,7 +129,7 @@ void plotter::run_plotter() {
           if (walk->path().filename().has_extension())
             continue;
           auto parts = util::split(walk->path().filename().string(), "_");
-          if (parts.size() != 3 || parts[0] != plot_id_hex)
+          if (parts.size() != 3 || std::stoull(parts[0]) != plot_id)
             continue;
           auto sn = std::stoull(parts[1]);
           if ((sn & 0xffffffff00000000ull) == (start_nonce & 0xffffffff00000000ull)) {
