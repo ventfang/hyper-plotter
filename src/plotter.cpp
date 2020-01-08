@@ -126,6 +126,8 @@ void plotter::run_plotter() {
   auto nonces_to_gen = total_nonces;
   auto fn_task_allocator = [&](uint64_t nonces_align) {
     for (auto& driver : drivers) {
+      if (! bfs::exists(driver))
+        continue;
       if (! writers[driver]) {
         auto canonical = driver;
         if (canonical[canonical.size() - 1] != '\\' && canonical[canonical.size() - 1] != '/')
@@ -139,11 +141,15 @@ void plotter::run_plotter() {
         bfs::directory_iterator end;
         bfs::directory_iterator walk(driver);
         uint64_t last_sn{0};
-        for (; walk != end; walk++) {
+        for (int plotting_files = 0; walk != end; walk++) {
           if (bfs::is_directory(*walk))
             continue;
-          if (walk->path().filename().has_extension())
+          if (walk->path().filename().has_extension()) {
+            if (! plotting_files)
+              free_spaces[driver] += bfs::file_size(walk->path());
+            ++plotting_files;
             continue;
+          }
           auto parts = util::split(walk->path().filename().string(), "_");
           if (parts.size() != 3 || parts[0] != plot_id_hex)
             continue;
@@ -172,7 +178,7 @@ void plotter::run_plotter() {
   fn_task_allocator(~63ull);
   fn_task_allocator(~7ull);
   
-  if (total_nonces == nonces_to_gen || nonces_to_gen > 7) {
+  if (total_nonces == nonces_to_gen) {
     spdlog::error("DISK SPACE NOT ENOUGH!!! nonces to generate: [{} / {}]", total_nonces - nonces_to_gen, total_nonces);
   }
   total_nonces -= nonces_to_gen;
@@ -209,7 +215,7 @@ void plotter::run_plotter() {
   for (auto& w : workers_) {
     spdlog::warn("* {}", w->info(true));
   }
-  spdlog::warn("* Plotting {} - [{}, {}), total {} nonces ({} TB)..."
+  spdlog::warn("* PLOTTING {} - [{}, {}), total {} nonces ({} TB)..."
               , plot_id_hex, start_nonce, start_nonce+total_nonces
               , total_nonces
               , int64_t(total_nonces * 256 * 1000 / 1024. / 1024 / 1024) / 1000.);
@@ -239,14 +245,15 @@ void plotter::run_plotter() {
       vnpm = !!vnpm ? (vnpm * (workers_.size() - 1) + report->npm) / workers_.size() : report->npm;
       if (report->mbps)
         vmbps = !!vmbps ? (vmbps * (workers_.size() - 1) + report->mbps) / workers_.size() : report->mbps;
-      spdlog::warn("[{:.2f}%] PLOTTING at {}|{} nonces/min, {} MB/s, finished: {}/{} GB, time elapsed {} mins."
+      spdlog::warn("[{:.2f}%] PLOTTING at {}|{} nonces/min, {}, {}/{} MB/s, finished: {:.2f}/{:.2f} GB, {:.3f}/{:.3f} hrs."
                 , int64_t(finished_nonces * 10000. / total_nonces) / 100.
                 , finished_nonces * 60ull * 1000 / plot_timer.elapsed()
                 , vnpm
-                , vmbps
+                , report->writer->info(), vmbps, vmbps * writers.size()
                 , int64_t(finished_nonces * 25600ull / 1024. / 1024) / 100.
                 , int64_t(total_nonces * 25600ull / 1024. / 1024) / 100.
-                , int(plot_timer.elapsed() / 60.) / 1000.);
+                , int(plot_timer.elapsed() / 3600.) / 1000.
+                , !!finished_nonces ? int(total_nonces / finished_nonces * plot_timer.elapsed() / 3600.) / 1000. : 0);
     }
     if (workers_.size() == 0)
       continue;
@@ -286,7 +293,7 @@ void plotter::run_plotter() {
     dispatched_nonces += ht->nonces;
     ++dispatched_count;
     ++on_going_task;
-    spdlog::debug("[{}] submit task ({}/{}/{}) [{}.{}][{} {}) {}"
+    spdlog::debug("[{}] submit task ({}/{}/{}) [{}-{}][{} +{}) {}"
                 , on_going_task
                 , dispatched_count
                 , finished_count
@@ -294,7 +301,7 @@ void plotter::run_plotter() {
                 , cur_worker_pos
                 , ht->current_write_task
                 , ht->sn
-                , ht->sn + ht->nonces
+                , ht->nonces
                 , ht->writer->info());
     hashing->push_task(std::move(ht));
   }

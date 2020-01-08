@@ -16,11 +16,11 @@ echo plot id: %plot_id%
 echo drivers: %drivers%
 echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cd %~dp0
-parallel-plotter.exe -p --id !plot_id! --sn !start_nonce! --num !nonces! --mem !memory! !drivers! -l debug
+parallel-plotter.exe -p --id !plot_id! --sn !start_nonce! --num !nonces! --mem !memory! !drivers!
 
 :: check plotting status
-for %%a in (..\build_msvc\a\) do (
-  for /f %%b in ('dir /s /b %%a\!plot_id!_*.plotting  2^>^nul') do (
+for %%a in (!drivers!) do (
+  for /f %%b in ('dir /s /b %%a!plot_id!_*.plotting 2^>^nul') do (
     if exist %%b (
       goto unfinished
     )
