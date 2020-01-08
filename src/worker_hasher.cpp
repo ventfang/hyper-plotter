@@ -50,9 +50,9 @@ void hasher_worker::run() {
 
 void hasher_worker::report(std::shared_ptr<hasher_task>& task) {
   auto writer = std::dynamic_pointer_cast<writer_worker>(task->writer);
-  spdlog::debug("establised hash [{}][{} {}) {}", task->current_write_task
+  spdlog::debug("establised hash [{}][{} +{}) {}", task->current_write_task
                                                 , task->sn
-                                                , task->sn + task->nonces
+                                                , task->nonces
                                                 , task->writer->info());
   writer->push_fin_hasher_task(std::move(task));
 }

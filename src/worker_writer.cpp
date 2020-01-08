@@ -98,7 +98,7 @@ void writer_worker::run() {
       do {
         if (! osfile_.is_open()) {
           auto do_create = ! util::file::exists(plotting_file);
-          spdlog::debug("nonces={}, open file `{}`, dio mode {} create new {}."
+          spdlog::debug("nonces={}, open file `{}`, dio mode {}, create new {}."
                       , wr_task->init_nonces, wr_task->plot_file(), dio, do_create);
           osfile_.open(plotting_file, do_create, dio);
           osfile_.allocate(wr_task->init_nonces * plotter_base::PLOT_SIZE);
@@ -122,12 +122,11 @@ void writer_worker::run() {
       else
         task->mbps = int(task->nonces * 1000ull * plotter_base::PLOT_SIZE / 1024 / 1024 / timer.elapsed());
     }
-    spdlog::debug("write nonce [{}] [{}][{}, {}) ({}) to `{}`"
-                  , success
+    spdlog::debug("write nonce [{} MB/s] [{}][{} +{}) to `{}`"
+                  , task->mbps
                   , task->current_write_task
                   , task->sn
-                  , task->sn+task->nonces
-                  , plotter_base::btoh(task->block->data(), 32)
+                  , task->nonces
                   , wr_task->plot_file());
     ctx_.report(std::move(task));
   }
