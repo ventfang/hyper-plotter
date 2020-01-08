@@ -253,7 +253,7 @@ void plotter::run_plotter() {
                 , int64_t(finished_nonces * 25600ull / 1024. / 1024) / 100.
                 , int64_t(total_nonces * 25600ull / 1024. / 1024) / 100.
                 , int(plot_timer.elapsed() / 3600.) / 1000.
-                , !!finished_nonces ? int(total_nonces / finished_nonces * plot_timer.elapsed() / 3600.) / 1000. : 0);
+                , !!finished_nonces ? int(total_nonces * 1. / finished_nonces * plot_timer.elapsed() / 3600.) / 1000. : 0);
     }
     if (workers_.size() == 0)
       continue;
