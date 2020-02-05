@@ -1,5 +1,5 @@
-# parallel-plotter
-The Parallel poc2 gpu plotter
+# hyper-plotter
+The Hyper poc2+ gpu plotter
 
 # How to use
 ```shell
@@ -22,7 +22,7 @@ Options:
                         log level, default: info
                         
 Example:
-  ./parallel-plotter.exe --plot -i 1234567890 -s 0 -n 100000 D:\ E:\ F:\ I:\ J:\ K:\
+  ./hyper-plotter.exe --plot -i 1234567890 -s 0 -n 100000 D:\ E:\ F:\ I:\ J:\ K:\
 ```
 # Pre-required
 * boost-compute
@@ -30,8 +30,8 @@ Example:
 
 # Build
 ```shell
-git clone https://github.com/lavaio/parallel-plotter.git --recursive
-cd parallel-plotter && mkdir build
+git clone https://github.com/lavaio/hyper-plotter.git --recursive
+cd hyper-plotter && mkdir build
 # unix like
 cmake ..
 # windows
