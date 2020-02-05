@@ -32,13 +32,13 @@ using namespace std;
 
 const string usage = "usage: %prog [OPTION]... [DIRECTORY]...";
 
-const string version = "%prog " PARALLEL_PLOTTER_VER " " GIT_BRANCH "-" GIT_COMMIT_HASH
+const string version = "%prog " HYPER_PLOTTER_VER " " GIT_BRANCH "-" GIT_COMMIT_HASH
   " (build: " __DATE__ " " __TIME__ ").\n"
   "Copyright (C) 2019-2020 The FreeStyle developers\n"
   "Distributed under the MIT software license, see the accompanying\n"
   "file COPYING or http://www.opensource.org/licenses/mit-license.php.\n";
 
-const string desc = "The Parallel poc2 gpu plotter.";
+const string desc = "The Hyper poc2 gpu plotter.";
 
 int main(int argc, char* argv[]) {
   opt::OptionParser parser = opt::OptionParser()
@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
     stringstream ssf;
     auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     auto tm = *std::localtime(&t);
-    ssf << "parallel-plotter-" 
+    ssf << "hyper-plotter-" 
         << tm.tm_year + 1900 << std::setfill('0')
         << std::setw(2) << tm.tm_mon + 1
         << std::setw(2) << tm.tm_mday
