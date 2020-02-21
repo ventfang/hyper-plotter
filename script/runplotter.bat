@@ -1,6 +1,10 @@
 @echo off
 setlocal enabledelayedexpansion
 
+:: set BOOST_COMPUTE_DEFAULT_DEVICE=
+:: set BOOST_COMPUTE_DEFAULT_DEVICE_TYPE=CPU
+:: set BOOST_COMPUTE_DEFAULT_VENDOR=
+
 set plot_id=1eccd66cd659b0c665ffdcebfda5f86c60cef300
 set drivers=D:\ E:\ F:\ G:\ H:\ I:\ J:\ K:\ L:\ M:\ N:\ O:\
 
