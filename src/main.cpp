@@ -186,7 +186,7 @@ int main(int argc, char* argv[]) {
     plotter(options).run();
     spdlog::info("Done!!!");
   } catch(compute::opencl_error& e) {
-      spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
+    spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
   } catch (std::exception& e) {
     spdlog::error("prog exception: `{}`", e.what());
   } catch (...) {

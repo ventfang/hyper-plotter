@@ -38,6 +38,8 @@ struct gpu_plotter : public plotter_base {
     global_work_size_  = global_work_size_ / args.lws * args.lws;
     assert(global_work_size_ >= 16);
     assert((global_work_size_ & ~15ull) == global_work_size_);
+    if((global_work_size_ & ~15ull) != global_work_size_)
+      throw std::runtime_error("global_work_size setting error");
     if (global_work_size_ < 16)
       global_work_size_ = 16;
   }

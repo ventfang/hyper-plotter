@@ -19,7 +19,7 @@ echo total nonce: %nonces%
 echo plot id: %plot_id%
 echo drivers: %drivers%
 echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cd %~dp0
+cd /d %~dp0
 hyper-plotter.exe -p --id !plot_id! --sn !start_nonce! --num !nonces! --mem !memory! !drivers!
 
 :: check plotting status

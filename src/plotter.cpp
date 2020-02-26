@@ -115,8 +115,8 @@ void plotter::run_plotter() {
   spdlog::warn("plot id:              {}", plotter_base::btoh(plot_id.data(), 20));
   spdlog::warn("start nonce:          {}", start_nonce);
   auto total_size_gb = total_nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
-  spdlog::warn("total nonces:         {} ({} GB)", total_nonces, size_t(total_size_gb*1000)/1000.);
-  spdlog::warn("total plot files:     {} in {}", total_files, patharg);
+  spdlog::debug("total nonces:         {} ({} GB)", total_nonces, size_t(total_size_gb*1000)/1000.);
+  spdlog::debug("total plot files:     {} in {}", total_files, patharg);
   spdlog::warn("plot file nonces:     {} ({} GB)", max_nonces_per_file, max_weight_per_file / 1024 / 1024 / 1024);
 
   // init writer worker and task
@@ -144,7 +144,8 @@ void plotter::run_plotter() {
         for (int plotting_files = 0; walk != end; walk++) {
           if (bfs::is_directory(*walk))
             continue;
-          if (walk->path().filename().has_extension()) {
+          if (walk->path().filename().has_extension()
+            && walk->path().filename().extension() == ".plotting") {
             if (! plotting_files)
               free_spaces[driver] += bfs::file_size(walk->path());
             ++plotting_files;
@@ -205,7 +206,7 @@ void plotter::run_plotter() {
   auto work_size = plotter->global_work_size() * buffer_size;
   auto max_flying_tasks = max_mem_to_use / work_size / plotter_base::PLOT_SIZE;
   max_flying_tasks = std::min(max_flying_tasks, workers_.size() * 2);
-  spdlog::warn("work size:            {} Bytes", work_size);
+  spdlog::warn("work size:            {} nonces ({} GB)", work_size, work_size * 256. / 1024 / 1024);
   spdlog::warn("max mem to use:       {} GB", int64_t((max_mem_to_use / 1024. / 1024 / 1024) * 10) / 10.);
   spdlog::warn("max flying tasks:     {} tasks", max_flying_tasks);
   if (max_flying_tasks == 0) {
