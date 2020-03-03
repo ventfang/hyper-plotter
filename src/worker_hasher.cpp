@@ -44,7 +44,7 @@ void hasher_worker::run() {
     report(task);
   }
 
-  spdlog::error("thread hasher worker [{}] stopped.", plotter_->info());
+  spdlog::info("thread hasher worker [{}] stopped.", plotter_->info());
 }
 
 void hasher_worker::report(std::shared_ptr<hasher_task>& task) {

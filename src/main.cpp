@@ -160,6 +160,7 @@ int main(int argc, char* argv[]) {
           COLOR_PRINT_Y("        version: {}", device.version());
         }
       }
+      return 0;
     }
 
     if (!dirs.empty()){
@@ -183,12 +184,15 @@ int main(int argc, char* argv[]) {
     spdlog::set_level(spdlog::level::from_str((string)options.get("level")));
     spdlog::set_pattern("[%D %T.%f][%L][%t] %^%v%$");
 
-    plotter(options).run();
+    if (! plotter(options).run())
+      return -1;
     spdlog::info("Done!!!");
   } catch(compute::opencl_error& e) {
     spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
+    return -1;
   } catch (std::exception& e) {
     spdlog::error("prog exception: `{}`", e.what());
+    return -1;
   } catch (...) {
     return -1;
   }

@@ -10,7 +10,8 @@ set drivers=D:\ E:\ F:\ G:\ H:\ I:\ J:\ K:\ L:\ M:\ N:\ O:\
 
 set start_nonce=auto
 set nonces=auto
-set memory=auto
+set max_memory=auto
+set max_file_size=1024
 
 echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 echo Prog Directory: %~dp0hyper-plotter.exe
@@ -20,7 +21,7 @@ echo plot id: %plot_id%
 echo drivers: %drivers%
 echo %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cd /d %~dp0
-hyper-plotter.exe -p --id !plot_id! --sn !start_nonce! --num !nonces! --mem !memory! !drivers!
+hyper-plotter.exe -p --id !plot_id! --sn !start_nonce! --num !nonces! --mem !max_memory! -w !max_file_size! !drivers!  || goto unfinished
 
 :: check plotting status
 for %%a in (!drivers!) do (

@@ -34,7 +34,7 @@ class plotter {
 public:
   explicit plotter(optparse::Values& args);
 
-  void run();
+  bool run();
 
   void report(std::shared_ptr<hasher_task>&& task);
   
@@ -43,7 +43,7 @@ public:
 private:
   void run_test();
 
-  void run_plotter();
+  bool run_plotter();
 
   void run_disk_bench();
 

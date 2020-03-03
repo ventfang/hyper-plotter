@@ -6,9 +6,9 @@
 namespace bfs = boost::filesystem;
 plotter::plotter(optparse::Values& args) : args_{args} {}
 
-void plotter::run() {
+bool plotter::run() {
   if ((int)args_.get("plot")) {
-    run_plotter();
+    return run_plotter();
   } else if ((int)args_.get("test")) {
     run_test();
   } else if ((int)args_.get("diskbench")) {
@@ -16,6 +16,7 @@ void plotter::run() {
   } else if ((int)args_.get("verify")) {
     run_plot_verify();
   }
+  return true;
 }
 
 void plotter::run_test() {
@@ -70,7 +71,7 @@ void plotter::run_test() {
   spdlog::info("gpu plot hash: 0x{}", ghash);
 }
 
-void plotter::run_plotter() {
+bool plotter::run_plotter() {
   signal::get().install_signal();
   auto plot_id_hex = args_["id"];
   bool valid;
@@ -78,7 +79,7 @@ void plotter::run_plotter() {
   std::tie(valid, plot_id) = plotter_base::to_plot_id_bytes(plot_id_hex);
   if (!valid) {
     spdlog::info("invalid plot id {}", plot_id_hex);
-    return;
+    return false;
   }
   auto start_nonce = std::stoull(args_["sn"]);
   auto total_nonces = std::stoull(args_["num"]);
@@ -96,14 +97,14 @@ void plotter::run_plotter() {
   };
   if (patharg.empty() || drivers.empty()) {
     spdlog::warn("No dirver(directory) specified. exit!!!");
-    return;
+    return false;
   }
   if (start_nonce == -1) {
     bfs::path drv(drivers[0]);
     auto sn = util::get_volume_sn(drv.root_path().string());
     if (sn == -1) {
       spdlog::error("Can't auto detect start nonce, use -n to set start nonce.");
-      return;
+      return false;
     }
     start_nonce = sn;
     start_nonce <<= 32;
@@ -115,8 +116,8 @@ void plotter::run_plotter() {
   spdlog::warn("plot id:              {}", plotter_base::btoh(plot_id.data(), 20));
   spdlog::warn("start nonce:          {}", start_nonce);
   auto total_size_gb = total_nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
-  spdlog::debug("total nonces:         {} ({} GB)", total_nonces, size_t(total_size_gb*1000)/1000.);
-  spdlog::debug("total plot files:     {} in {}", total_files, patharg);
+  spdlog::debug("total nonces:        {} ({} GB)", total_nonces, size_t(total_size_gb*1000)/1000.);
+  spdlog::warn("total drivers:        [{}] {}", drivers.size(), patharg);
   spdlog::warn("plot file nonces:     {} ({} GB)", max_nonces_per_file, max_weight_per_file / 1024 / 1024 / 1024);
 
   // init writer worker and task
@@ -177,14 +178,14 @@ void plotter::run_plotter() {
     }
   };
   fn_task_allocator(~63ull);
-  fn_task_allocator(~7ull);
+  //fn_task_allocator(~7ull);
   
   if (total_nonces == nonces_to_gen) {
     spdlog::error("DISK SPACE NOT ENOUGH!!! nonces to generate: [{} / {}]", total_nonces - nonces_to_gen, total_nonces);
   }
   total_nonces -= nonces_to_gen;
   if (total_nonces == 0)
-    return;
+    return false;
 
   // init hasher worker
   auto plot_args = gpu_plotter::args_t{std::stoull(args_["lws"])
@@ -194,8 +195,10 @@ void plotter::run_plotter() {
   auto device = compute::system::default_device();
   auto plotter = std::make_shared<gpu_plotter>(device, plot_args);
   auto res = plotter->init(KERNEL_PROG, "plotting", plot_id);
-  if (!res)
+  if (!res) {
     spdlog::error("init gpu plotter failed. kernel build log: {}", plotter->program().build_log());
+    return false;
+  }
   auto hashing = std::make_shared<hasher_worker>(*this, plotter);
   workers_.push_back(hashing);
 
@@ -211,7 +214,7 @@ void plotter::run_plotter() {
   spdlog::warn("max flying tasks:     {} tasks", max_flying_tasks);
   if (max_flying_tasks == 0) {
     spdlog::error("No Memory to Allocate jobs.");
-    return;
+    return false;
   }
   for (auto& w : workers_) {
     spdlog::warn("* {}", w->info(true));
@@ -318,6 +321,7 @@ void plotter::run_plotter() {
   for (auto& t : pools)
     t.join();
   spdlog::info("all worker thread stopped!!!");
+  return true;
 }
 
 void plotter::run_disk_bench() {

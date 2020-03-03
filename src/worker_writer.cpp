@@ -135,5 +135,5 @@ void writer_worker::run() {
   if (!success)
     spdlog::error("thread writer worker [{}] stopped with error.", driver_);
   else
-    spdlog::error("thread writer worker [{}] stopped.", driver_);
+    spdlog::info("thread writer worker [{}] stopped.", driver_);
 }
