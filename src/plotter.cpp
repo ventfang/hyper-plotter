@@ -111,6 +111,9 @@ void plotter::run_plotter() {
     pools.emplace_back([=](){ worker->run(); });
   }
 
+  while (! signal::get().stopped()) 
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
   // dispatcher
   util::timer plot_timer;
   int cur_worker_pos{0}, max_worker_pos{(int)workers_.size()-1};

@@ -97,6 +97,7 @@ public:
         total_allocated_ = allocated_mem;
         auto key = nb.data();
         used_blocks_.emplace(key, std::move(nb));
+        spdlog::warn("ALLOCATE NEW BLOCK {} {}.", free_blocks_.size(), used_blocks_.size());
         return used_blocks_[key];
       } else {
         auto key = it->second.data();
