@@ -200,11 +200,16 @@ bool plotter::run_plotter() {
     return false;
   }
   auto hashing = std::make_shared<hasher_worker>(*this, plotter);
-  workers_.push_back(hashing);
 
-  auto buffer_size =  std::stol(args_["buffers"]) & 7;
+  auto buffer_size =  std::stol(args_["buffers"]) & 0xfff;
   if (!buffer_size) {
-    buffer_size = (plotter->global_work_size() >= 8192) ? 1 : 2;
+    if (plotter->global_work_size() >= 8192) {
+      buffer_size = 1;
+    } else if (workers_.size() == 1) {
+      buffer_size = max_mem_to_use / 2 / (plotter->global_work_size() * plotter_base::PLOT_SIZE);
+    } else {
+      buffer_size = 2;
+    }
   }
   auto work_size = plotter->global_work_size() * buffer_size;
   auto max_flying_tasks = max_mem_to_use / work_size / plotter_base::PLOT_SIZE;
@@ -216,6 +221,8 @@ bool plotter::run_plotter() {
     spdlog::error("No Memory to Allocate jobs.");
     return false;
   }
+
+  workers_.push_back(hashing);
   for (auto& w : workers_) {
     spdlog::warn("* {}", w->info(true));
   }
