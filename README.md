@@ -1,6 +1,6 @@
 # hyper-plotter
 The Hyper poc2 gpu plotter
-
+![](perf120120.png)
 # How to use
 ```shell
 Options:
