@@ -40,13 +40,13 @@ struct cpu_plotter : public plotter_base {
 
     for (int i = 32, j = PLOT_SIZE - HASH_SIZE; i < (PLOT_SIZE / 2); i += 64, j -= 64) {
       BYTES_SWAP_64(&data_[i + 0], &data_[j + 0]);
-      BYTES_SWAP_64(&data_[i + 1], &data_[j + 1]);
-      BYTES_SWAP_64(&data_[i + 2], &data_[j + 2]);
-      BYTES_SWAP_64(&data_[i + 3], &data_[j + 3]);
+      BYTES_SWAP_64(&data_[i + 8], &data_[j + 8]);
+      BYTES_SWAP_64(&data_[i + 16], &data_[j + 16]);
+      BYTES_SWAP_64(&data_[i + 24], &data_[j + 24]);
     }
   }
 
-  std::string to_string() const { return btoh(data_, PLOT_SIZE); }
+  std::string to_string(size_t size = PLOT_SIZE) const { return btoh(data_, size); }
   const uint8_t* data() const { return data_; }
   size_t size() const { return PLOT_SIZE; }
 

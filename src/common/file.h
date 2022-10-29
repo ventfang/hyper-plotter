@@ -15,6 +15,11 @@ public:
     return (INVALID_FILE_ATTRIBUTES != attr) && ((FILE_ATTRIBUTE_DIRECTORY & attr) == 0);
   }
 
+  static bool rename(const std::string& src, const std::string& dst) {
+    auto ret = ::MoveFileExA(src.c_str(), dst.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+    return ret == TRUE;
+  }
+
 public:
   file() = default;
   ~file() { close(); }
@@ -31,8 +36,8 @@ public:
 
     DWORD access_flag = GENERIC_READ | GENERIC_WRITE | FILE_ATTRIBUTE_NORMAL;
     DWORD create_flag = create ? CREATE_ALWAYS : OPEN_EXISTING;
-    DWORD attr_lag = nobuf ? (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH): FILE_ATTRIBUTE_NORMAL;
-    handle_ = ::CreateFileA(filepath.c_str(), access_flag, 0, NULL, create_flag, attr_lag, NULL);
+    DWORD attr_lag = nobuf ? (FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH): FILE_ATTRIBUTE_NORMAL|FILE_FLAG_RANDOM_ACCESS;
+    handle_ = ::CreateFileA(filepath.c_str(), access_flag, FILE_SHARE_READ, NULL, create_flag, attr_lag, NULL);
     if (INVALID_HANDLE_VALUE == handle_) {
       error_ = ::GetLastError();
       return false;
@@ -50,17 +55,19 @@ public:
     }
   }
 
-  bool seek(size_t offset) {
+  bool seek(size_t offset, uint64_t mode = FILE_BEGIN) {
     if (handle_ == INVALID_HANDLE_VALUE)
       return false;
 
-    LONG hi = offset >> 32;
-    LONG lo = offset & 0xFFFFFFFF;
-    DWORD ret = ::SetFilePointer(handle_, lo, &hi, FILE_BEGIN);
-    if (ret == INVALID_SET_FILE_POINTER) {
-      error_ = ::GetLastError();
-      return false;
-    }
+    LARGE_INTEGER li;
+    li.QuadPart = offset;
+    li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, (DWORD)mode);
+    error_ = ::GetLastError();
+    if (li.LowPart == INVALID_SET_FILE_POINTER && error_ != NO_ERROR)
+        return false;
+    if (li.QuadPart != offset)
+        return false;
+
     return true;
   }
 
@@ -90,7 +97,7 @@ public:
       ret = ::WriteFile(handle_, data, (DWORD)bytes_to_write, &wr_bytes, NULL);
       bytes_to_write -= wr_bytes;
       data += wr_bytes;
-    } while (ret && bytes_to_write > 0 && wr_bytes > 0);
+    } while (ret && bytes_to_write > 0);
 
     if (!ret || bytes_to_write > 0) {
       error_ = ::GetLastError();
@@ -100,22 +107,33 @@ public:
     return true;
   }
 
-  bool allocate(size_t bytes) {
+  bool allocate(size_t bytes, bool sparse=true) {
     if (handle_ == INVALID_HANDLE_VALUE)
       return false;
 
     size_t file_size = size();
-    if (bytes < file_size)
+    if (bytes <= file_size)
       return true;
 
-    LONG hi = bytes >> 32;
-    LONG lo = bytes & 0xFFFFFFFF;
-    DWORD ret = ::SetFilePointer(handle_, lo, &hi, FILE_BEGIN);
-    if (ret == INVALID_SET_FILE_POINTER) {
+    LARGE_INTEGER li;
+    li.QuadPart = bytes;
+    li.LowPart = ::SetFilePointer(handle_, li.LowPart, &li.HighPart, FILE_BEGIN);
+    error_ = ::GetLastError();
+    if (li.LowPart == INVALID_SET_FILE_POINTER && error_ != NO_ERROR)
+      return false;
+    if (li.QuadPart != bytes)
+      return false;
+    if (!::SetEndOfFile(handle_)) {
       error_ = ::GetLastError();
       return false;
     }
-    return TRUE == ::SetEndOfFile(handle_);
+    
+    // TODO: check success
+    if (sparse && !::SetFileValidData(handle_, bytes)) {
+      error_ = ::GetLastError();
+      return false;
+    }
+    return true;
   }
 
   bool flush() {
@@ -137,6 +155,10 @@ public:
     return (((size_t)hi) << 32) + lo;
   }
 
+  const std::string& filename() const {
+    return file_path_;
+  }
+  
   uint64_t last_error() const { return error_; }
 
 private:

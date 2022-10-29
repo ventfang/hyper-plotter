@@ -9,13 +9,21 @@ namespace compute = boost::compute;
 
 #include <OptionParser.h>
 #include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
 
 #include "config.h"
 #include "plotter.h"
+#include "common/utils.h"
 
 namespace opt = optparse;
 using namespace std;
+
+#ifdef WIN32
+#define PAUSE() system("pause")
+#else
+#define std::getc()
+#endif
 
 #define COLOR_PRINT_R SPDLOG_ERROR
 #define COLOR_PRINT_G SPDLOG_INFO
@@ -24,12 +32,13 @@ using namespace std;
 
 const string usage = "usage: %prog [OPTION]... [DIRECTORY]...";
 
-const string version = "%prog " PARALLEL_PLOTER_VER " " GIT_BRANCH "-" GIT_COMMIT_HASH "\n"
+const string version = "%prog " HYPER_PLOTTER_VER " " GIT_BRANCH "-" GIT_COMMIT_HASH
+  " (build: " __DATE__ " " __TIME__ ").\n"
   "Copyright (C) 2019-2020 The FreeStyle developers\n"
   "Distributed under the MIT software license, see the accompanying\n"
   "file COPYING or http://www.opensource.org/licenses/mit-license.php.\n";
 
-const string desc = "The Parallel poc2 gpu ploter.";
+const string desc = "The Hyper poc2 gpu plotter.";
 
 int main(int argc, char* argv[]) {
   opt::OptionParser parser = opt::OptionParser()
@@ -40,13 +49,16 @@ int main(int argc, char* argv[]) {
   static_assert(sizeof(unsigned long long) == 8, "unsigned long long must be equal to 8 bytes.");
   parser.add_option("-V", "--verbose").action("count").help("verbose, default: %default");
   parser.add_option("-t", "--test").action("count").help("test mode, default: %default");
-  parser.add_option("-i", "--id").action("store").type("uint64_t").set_default(0).help("plot id, default: %default");
-  parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(0).help("start nonce, default: %default");
-  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(10000).help("number of nonces, default: %default");
-  parser.add_option("-w", "--weight").action("store").type("double").set_default(1).help("plot file weight, default: %default (GB)");
-  parser.add_option("-m", "--mem").action("store").type("double").set_default(65535).help("memory to use, default: %default (GB)");
+  parser.add_option("-i", "--id").action("store").type("string").set_default(0).help("plot id, default: %default");
+  parser.add_option("-s", "--sn").action("store").type("uint64_t").set_default(-1).help("start nonce, default: auto");
+  parser.add_option("-n", "--num").action("store").type("uint32_t").set_default(-1).help("number of nonces, default: auto");
+  parser.add_option("-w", "--weight").action("store").type("double").set_default(1024).help("plot file weight, default: %default (GB)");
+  parser.add_option("-m", "--mem").action("store").type("int32_t").set_default(0).help("memory to use, default: auto (GB)");
   parser.add_option("-p", "--plot").action("count").help("run plots generation, default: %default");
-
+  parser.add_option("-d", "--diskbench").action("count").help("run disk bench, default: %default");
+  parser.add_option("--verify").action("count").help("plot file validation, default: %default");
+  
+  parser.add_option("--buffers").action("store").type("uint32_t").set_default(0).help("buffers, default:auto");
   parser.add_option("--step").action("store").type("uint32_t").set_default(8192).help("hash calc batch, default: %default");
   parser.add_option("--gws").action("store").type("uint32_t").set_default(0).help("global work size, default: %default");
   parser.add_option("--lws").action("store").type("uint32_t").set_default(0).help("local work size, default: %default");
@@ -58,32 +70,60 @@ int main(int argc, char* argv[]) {
 
   try {
     opt::Values& options = parser.parse_args(argc, argv);
+    if (options["sn"] == "auto")
+      options["sn"] = "-1";
+    if (options["num"] == "auto")
+      options["num"] = "-1";
+    if (options["mem"] == "auto")
+      options["mem"] = "0";
+    if (options["buffers"] == "auto")
+      options["buffers"] = "0";
     vector<string> dirs = parser.args();
-
+    options["argv"] = accumulate(argv, argv+argc, string{"cmdline:"},
+                                [](string a, const string b) -> decltype(auto) {
+                                  return  std::move(a) + " " + b;
+                                });
+    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    stringstream ssf;
+    auto t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    auto tm = *std::localtime(&t);
+    ssf << "hyper-plotter-" 
+        << tm.tm_year + 1900 << std::setfill('0')
+        << std::setw(2) << tm.tm_mon + 1
+        << std::setw(2) << tm.tm_mday
+        << std::setw(2) << tm.tm_hour
+        << std::setw(2) << tm.tm_min
+        << std::setw(2) << tm.tm_sec << ".log";
+    auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(ssf.str());
+    auto sinks = spdlog::sinks_init_list{ console_sink, file_sink };
+    auto default_logger = std::make_shared<spdlog::logger>("logger", sinks);
+    spdlog::set_default_logger(default_logger);   
     spdlog::set_pattern("%^%v%$");
     spdlog::info(parser.get_version());
-    spdlog::set_level(spdlog::level::trace);
+    spdlog::info(options["argv"]);
 
-    std::vector<compute::platform> platforms = compute::system::platforms();
-    spdlog::debug("Listing platforms/devices...");
-    std::vector<compute::device> cpu_devices;
-    std::vector<compute::device> gpu_devices;
-    for(auto& platform : platforms) {
-      COLOR_PRINT_Y("Platform {}", platform.name());
-      std::vector<compute::device> devices = platform.devices();
-      for(auto& device : devices) {
-        std::string type;
-        if(device.type() & compute::device::gpu)
-          gpu_devices.push_back(device), (type = "GPU");
-        else if(device.type() & compute::device::cpu)
-          cpu_devices.push_back(device), (type = "CPU");
-        else if(device.type() & compute::device::accelerator)
-          type = "Accelerator";
-        else
-          type = "Unknown";
+    if ((int)options.get("verbose") > 0) {
+      spdlog::set_level(spdlog::level::trace);
 
-        COLOR_PRINT_Y("    {}: {}", type, device.name());
-        if ((int)options.get("verbose") > 0) {
+      std::vector<compute::platform> platforms = compute::system::platforms();
+      spdlog::debug("Listing platforms/devices...");
+      std::vector<compute::device> cpu_devices;
+      std::vector<compute::device> gpu_devices;
+      for(auto& platform : platforms) {
+        COLOR_PRINT_Y("Platform {}", platform.name());
+        std::vector<compute::device> devices = platform.devices();
+        for(auto& device : devices) {
+          std::string type;
+          if(device.type() & compute::device::gpu)
+            gpu_devices.push_back(device), (type = "GPU");
+          else if(device.type() & compute::device::cpu)
+            cpu_devices.push_back(device), (type = "CPU");
+          else if(device.type() & compute::device::accelerator)
+            type = "Accelerator";
+          else
+            type = "Unknown";
+
+          COLOR_PRINT_Y("    {}: {}", type, device.name());
           COLOR_PRINT_Y("        clock_frequency: {}", device.clock_frequency());
           COLOR_PRINT_Y("        compute_units: {}", device.compute_units());
           COLOR_PRINT_Y("        driver_version: {}", device.driver_version());
@@ -106,41 +146,29 @@ int main(int argc, char* argv[]) {
         }
       }
     }
-    
-    COLOR_PRINT_R("");
-    if (cpu_devices.size() > 0) {
-      COLOR_PRINT_R("CPU device:           {}", cpu_devices[0].name());
-    }
-    if (gpu_devices.size() > 0) {
-      COLOR_PRINT_R("GPU device:           {}", gpu_devices[0].name());
-    } else {
-      COLOR_PRINT_R("GPU device:           not setup");
-    }
 
-    if (dirs.empty()) {
-      COLOR_PRINT_R("directories:          not set (dry run).");
-    }
-    else {
+    if (!dirs.empty()){
       auto&& directories = accumulate(std::next(dirs.begin()), dirs.end(), *dirs.begin(),
                                       [](string &a, const string &b) -> decltype(auto) {
                                         return  std::move(a) + ", " + b;
                                       });
-      COLOR_PRINT_R("directories:          [{}] ({})", dirs.size(), directories);
       options["drivers"] = directories;
     }
 
-    COLOR_PRINT_R("plot id:              {}", std::stoull(options["id"]));
-    COLOR_PRINT_R("start nonce:          {}", std::stoull(options["sn"]));
-    auto nonces = (uint32_t)std::stoull(options["num"]);
-    auto total_size_gb = nonces * 1. * plotter_base::PLOT_SIZE / 1024 / 1024 / 1024;
-    COLOR_PRINT_R("number of nonces:     {} ({} GB)", nonces, int(total_size_gb*100)/100.);
-    COLOR_PRINT_R("plot weight:          {} GB", (double)options.get("weight"));
-    COLOR_PRINT_R("number of plot files: {}", std::ceil(total_size_gb / (double)options.get("weight")));
+    #ifdef WIN32
+    if (((int)options.get("plot") || (int)options.get("diskbench"))
+      && !util::acquire_manage_volume_privs()) {
+      spdlog::error("\n\t\t\t************************************************"
+                    "\n\t\t\t*** RUN WITHOUT PRIVILEGES will be very slow ***"
+                    "\n\t\t\t***    restart with administrative rights.   ***"
+                    "\n\t\t\t************************************************\n");
+    }
+    #endif
 
     spdlog::set_level(spdlog::level::from_str((string)options.get("level")));
-    spdlog::set_pattern("[%H:%M:%S.%f][%t] %^%v%$");
-	
-	  plotter(options).run();
+    spdlog::set_pattern("[%D %T.%f][%L][%t] %^%v%$");
+
+    plotter(options).run();
     spdlog::info("Done!!!");
   } catch(compute::opencl_error& e) {
       spdlog::error("opencl error: [{}] {}", e.error_code(), e.error_string());
